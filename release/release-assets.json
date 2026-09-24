@@ -1,0 +1,9 @@
+{
+  "repository": "h1collab/zorix-iso",
+  "tag": "v0.7.0",
+  "assets": [
+    {"name":"ZorixOS-0.7.iso","size":437256192,"sha256":"18eee8b5137c6eabcfeaa6f526bd9613d7f9c1eda20faf774bb4cb3d08fca793"},
+    {"name":"ZorixOS-0.7.iso.sha256","size":82,"sha256":"bd4280446f2f4cce0b36c16676c4b1ac110e06ce3b899b6c2f24c4b7f540c295"},
+    {"name":"zorix-os-0.7-source-and-tools.tar.gz","size":122185,"sha256":"d33c7be66064666fe8d51b723f89d1034d61a4214d88229a216ad803fe13b40c"}
+  ]
+}
