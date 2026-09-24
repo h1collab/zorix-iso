@@ -1,0 +1,41 @@
+{
+  "product": "Zorix OS 0.7 Liquid Glass Live Experimental",
+  "artifact": {
+    "filename": "ZorixOS-0.7.iso",
+    "bytes": 437256192,
+    "sha256": "18eee8b5137c6eabcfeaa6f526bd9613d7f9c1eda20faf774bb4cb3d08fca793"
+  },
+  "passed_verifications": {
+    "api_security": 50,
+    "ui_interaction": 35,
+    "rootfs_execution": 7,
+    "iso_structural_audit": 34,
+    "total": 126
+  },
+  "rust": {
+    "attempted": true,
+    "compiled": false,
+    "reason": "rustc is unavailable in the artifact build environment; source and reproducible build target are included"
+  },
+  "iso_audit": {
+    "archive_entries": 16991,
+    "regular_file_hashes_verified": 13319,
+    "boot_test": "NOT EXECUTED"
+  },
+  "firmware": {
+    "bytes": 437256192,
+    "sha256": "18eee8b5137c6eabcfeaa6f526bd9613d7f9c1eda20faf774bb4cb3d08fca793",
+    "firmware": "x86-64 UEFI only; unsigned loader",
+    "legacy_bios": false,
+    "secure_boot_validated": false,
+    "boot_tested": false
+  },
+  "limitations": [
+    "Firmware/UEFI boot was not executed in this build environment.",
+    "Secure Boot is not validated and the EFI loader is unsigned.",
+    "Rust source and reproducible build target are included, but no Rust binary is present because rustc was unavailable.",
+    "The Linux kernel is Debian 6.12.96+deb13-amd64, not a newly compiled Zorix kernel.",
+    "RTX, DLSS, Wine games, Wi-Fi, audio and physical GPU acceleration were not validated on real hardware.",
+    "This is a Live ISO; disk installer and persistence are not included."
+  ]
+}
