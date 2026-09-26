@@ -1,8 +1,41 @@
 {
   "product": "Zorix OS 1.2.1 Glass Live Experimental",
   "kernel": "6.12.96+deb13-amd64",
-  "iso": {"path": "ZorixOS-1.2.1-Glass.iso", "bytes": 446693376, "sha256": "628e01218ef3b724f74e57bdab06a5c6a91bed860cecfa5207839f83f7f767d1"},
-  "boot_fix": {"native_xorg_deadline_seconds": 8, "bounded_process_shutdown": true, "term_then_kill": true, "automatic_portable_fallback": true, "unbounded_xorg_wait_removed": true, "splash_full_frame_writes_per_start": 1, "splash_spinner_fps": 8, "native_input_bridge_when_ddx_missing": true},
-  "checks": {"live_boot_shell_syntax": "passed", "python_compile": "passed", "javascript_syntax": "passed", "swift_core_runtime_version": "1.2.1", "xvfb_xdpyinfo_smoke": "passed", "iso_structural_audit_checks_passed": 37, "rootfs_archive_entries": 17323, "regular_file_hashes_verified": 13455},
-  "limitations": {"firmware_boot_tested_in_build_environment": false, "virtualbox_boot_tested_after_fix": false, "secure_boot_validated": false, "legacy_bios": false, "disk_installer": false, "persistence": false}
+  "github_release": {
+    "path": "ZorixOS-1.2.1-Glass.iso",
+    "bytes": 446693376,
+    "sha256": "da508b8e836b8c80664a003c35259568d100a3e0e700d47b3833ee9bd9507f95",
+    "build_method": "GitHub Actions reconstruction from verified Zorix 1.2 base plus 1.2.1 patches"
+  },
+  "local_reference_build": {
+    "bytes": 446693376,
+    "sha256": "628e01218ef3b724f74e57bdab06a5c6a91bed860cecfa5207839f83f7f767d1"
+  },
+  "boot_fix": {
+    "native_xorg_deadline_seconds": 8,
+    "bounded_process_shutdown": true,
+    "term_then_kill": true,
+    "automatic_portable_fallback": true,
+    "unbounded_xorg_wait_removed": true,
+    "splash_full_frame_writes_per_start": 1,
+    "splash_spinner_fps": 8,
+    "native_input_bridge_when_ddx_missing": true
+  },
+  "local_checks": {
+    "live_boot_shell_syntax": "passed",
+    "python_compile": "passed",
+    "javascript_syntax": "passed",
+    "swift_core_runtime_version": "1.2.1",
+    "xvfb_xdpyinfo_smoke": "passed",
+    "iso_structural_audit_checks_passed": 37,
+    "rootfs_archive_entries": 17323,
+    "regular_file_hashes_verified": 13455
+  },
+  "limitations": {
+    "virtualbox_boot_tested_after_fix": false,
+    "secure_boot_validated": false,
+    "legacy_bios": false,
+    "disk_installer": false,
+    "persistence": false
+  }
 }
