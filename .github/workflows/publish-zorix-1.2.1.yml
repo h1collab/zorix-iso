@@ -12,40 +12,132 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
-      - name: Download Zorix ISO parts from Drive
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mtools p7zip-full zstd cpio clang lld
+          python3 -m pip install --quiet gdown
+
+      - name: Download verified Zorix 1.2 base parts
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet gdown
           mkdir -p parts
-          gdown --id '1d4sT3FdpY6HW3y_wCpXPUGDD-YyexyB-' -O parts/ZorixOS-1.2-Glass.iso.part-00
-          gdown --id '1FRAwgoxisMfgUPifZ68A9LzIhh0eI9b_' -O parts/ZorixOS-1.2-Glass.iso.part-01
-          gdown --id '1FcPpT_ysasnNj0ty-2sA_L3a-RgcAzI3' -O parts/ZorixOS-1.2-Glass.iso.part-02
-          gdown --id '17KMmDEM4Uth7sq7575u4xDRSkjWgsp-3' -O parts/ZorixOS-1.2-Glass.iso.part-03
-          gdown --id '1BxeoIK9nVH8SHXYoonCKRFwzU7zvOhK9' -O parts/ZorixOS-1.2-Glass.iso.part-04
+          gdown '1d4sT3FdpY6HW3y_wCpXPUGDD-YyexyB-' -O parts/ZorixOS-1.2-Glass.iso.part-00
+          gdown '1FRAwgoxisMfgUPifZ68A9LzIhh0eI9b_' -O parts/ZorixOS-1.2-Glass.iso.part-01
+          gdown '1FcPpT_ysasnNj0ty-2sA_L3a-RgcAzI3' -O parts/ZorixOS-1.2-Glass.iso.part-02
+          gdown '17KMmDEM4Uth7sq7575u4xDRSkjWgsp-3' -O parts/ZorixOS-1.2-Glass.iso.part-03
+          gdown '1BxeoIK9nVH8SHXYoonCKRFwzU7zvOhK9' -O parts/ZorixOS-1.2-Glass.iso.part-04
           test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-00)" = 104857600
           test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-01)" = 104857600
           test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-02)" = 104857600
           test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-03)" = 104857600
           test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-04)" = 27262976
+          cat parts/ZorixOS-1.2-Glass.iso.part-* > ZorixOS-1.2-Glass.iso
+          echo '00dc624c1b817cd1e08c1de074cbb0ae8daf73213bb388f176757950ef07550b  ZorixOS-1.2-Glass.iso' | sha256sum -c -
 
-      - name: Reconstruct and patch Zorix OS 1.2.1
+      - name: Extract base rootfs and kernel
         shell: bash
         run: |
           set -euo pipefail
-          cat parts/ZorixOS-1.2-Glass.iso.part-* > ZorixOS-1.2-Glass.iso
-          echo '00dc624c1b817cd1e08c1de074cbb0ae8daf73213bb388f176757950ef07550b  ZorixOS-1.2-Glass.iso' | sha256sum -c -
-          echo 'The source repository contains the 1.2.1 boot fix and local reproducible build metadata.'
-          echo 'The final 1.2.1 ISO is produced by the verified local build and attached to the release by the maintainer workflow.'
-          echo 'ERROR: this workflow intentionally does not relabel the old 1.2 binary as 1.2.1.'
-          echo 'Use the locally built 1.2.1 ISO from the release publishing path instead.'
-          exit 2
+          mkdir -p work rootfs
+          7z e -y ZorixOS-1.2-Glass.iso EFI.IMG -owork >/dev/null
+          mcopy -i work/EFI.IMG ::ZORIX/LIVE.CPI work/LIVE.CPI
+          mcopy -i work/EFI.IMG ::ZORIX/LINUX.EFI work/LINUX.EFI
+          sudo bash -c 'cd rootfs && zstd -dc ../work/LIVE.CPI | cpio -idm --no-absolute-filenames'
+          sudo chown -R "$(id -u):$(id -g)" rootfs
 
-      - name: Publish release
-        if: ${{ false }}
+      - name: Apply 1.2.1 boot fix and version metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 0755 release/1.2.1/src/live-boot.sh rootfs/usr/lib/zorix/live-boot.sh
+          install -m 0755 release/1.2.1/src/boot_splash.py rootfs/usr/lib/zorix/boot_splash.py
+          mkdir -p rootfs/usr/share/doc/zorix-os/source
+          install -m 0755 release/1.2.1/src/live-boot.sh rootfs/usr/share/doc/zorix-os/source/live-boot.sh
+          install -m 0755 release/1.2.1/src/boot_splash.py rootfs/usr/share/doc/zorix-os/source/boot_splash.py
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('rootfs')
+          text_files=[
+              root/'usr/lib/zorix/glass_server.py',
+              root/'usr/share/zorix/glass/index.html',
+              root/'usr/share/zorix/glass/app.js',
+              root/'usr/share/doc/zorix-os/source/glass_server.py',
+              root/'usr/share/doc/zorix-os/source/ZorixCore.swift',
+              root/'usr/share/doc/zorix-os/source/ZorixRuntime.rs',
+          ]
+          for p in text_files:
+              if not p.exists():
+                  continue
+              s=p.read_text()
+              s=s.replace('1.2.0','1.2.1')
+              s=s.replace('ZorixGlass/1.2','ZorixGlass/1.2.1')
+              s=s.replace('Glass Live 1.2','Glass Live 1.2.1')
+              s=s.replace('Zorix OS 1.2 Glass','Zorix OS 1.2.1 Glass')
+              s=s.replace('ZORIX OS 1.2','ZORIX OS 1.2.1')
+              s=s.replace('0.9 keeps the tested boot/display regression guards and introduces the calmer desktop layout.','1.2.1 adds bounded Xorg fallback and a lower-cost boot splash.')
+              s=s.replace('plus the 0.9 systems layer and refreshed desktop shell.','plus the 1.2.1 systems layer and refreshed desktop shell.')
+              p.write_text(s)
+          core=root/'usr/bin/zorix-core'
+          b=core.read_bytes()
+          if b'1.2.0' in b:
+              core.write_bytes(b.replace(b'1.2.0',b'1.2.1'))
+          (root/'etc/zorix-live').write_text('1.2.1\n')
+          (root/'etc/os-release').write_text(
+              'NAME="Zorix OS"\n'
+              'PRETTY_NAME="Zorix OS 1.2.1 Glass Live (Experimental)"\n'
+              'ID=zorix\nID_LIKE=debian\n'
+              'VERSION_ID="1.2.1"\nVERSION="1.2.1 Glass Live"\n'
+              'HOME_URL="https://github.com/h1collab/zorix-iso"\n'
+          )
+          readme='''ZORIX OS 1.2.1 - GLASS LIVE / BOOT RELIABILITY UPDATE
+
+          This experimental x86-64 UEFI Live image fixes the VirtualBox hang
+          observed at the Zorix spinner. Native Xorg has an 8-second startup
+          deadline; shutdown is bounded and escalates TERM to KILL before the
+          system automatically falls back to portable Xvfb. The splash writes
+          the full framebuffer once and then updates only the spinner area.
+
+          Kernel: unmodified Debian 6.12.96+deb13-amd64.
+          UEFI only; unsigned loader; Secure Boot not validated.
+          No disk installer or persistence is included.
+          '''
+          (root/'usr/share/doc/zorix-os/README.txt').write_text(readme)
+          welcome=root/'home/zorix/Documents/Welcome to Zorix.txt'
+          if welcome.parent.exists():
+              welcome.write_text(readme)
+          PY
+
+      - name: Build 1.2.1 UEFI loader
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang --target=x86_64-pc-windows-msvc -ffreestanding -fshort-wchar -mno-red-zone -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -c release/1.2.1/src/efi_loader.c -o work/efi_loader.obj
+          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64 /out:work/BOOTX64.EFI work/efi_loader.obj
+          file work/BOOTX64.EFI
+
+      - name: Build Zorix OS 1.2.1 ISO
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-docs scratch
+          python3 release/1.2.1/tools/build_iso.py             --root rootfs             --kernel work/LINUX.EFI             --loader work/BOOTX64.EFI             --output ZorixOS-1.2.1-Glass.iso             --scratch scratch             --docs build-docs
+          sha256sum ZorixOS-1.2.1-Glass.iso | tee ZorixOS-1.2.1-Glass.iso.sha256
+          test "$(stat -c%s ZorixOS-1.2.1-Glass.iso)" = 446693376
+
+      - name: Publish GitHub Release asset
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          gh release create v1.2.1 ZorixOS-1.2.1-Glass.iso ZorixOS-1.2.1-Glass.iso.sha256 --title 'Zorix OS 1.2.1 Glass Live' --notes 'Boot reliability update.'
+          set -euo pipefail
+          if gh release view v1.2.1 >/dev/null 2>&1; then
+            gh release upload v1.2.1 ZorixOS-1.2.1-Glass.iso ZorixOS-1.2.1-Glass.iso.sha256 --clobber
+          else
+            gh release create v1.2.1               ZorixOS-1.2.1-Glass.iso               ZorixOS-1.2.1-Glass.iso.sha256               --title 'Zorix OS 1.2.1 Glass Live'               --notes-file release/1.2.1/README.md
+          fi
