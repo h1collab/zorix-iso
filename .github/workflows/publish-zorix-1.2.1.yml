@@ -1,0 +1,51 @@
+name: Publish Zorix OS 1.2.1 ISO
+
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-zorix-1.2.1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download Zorix ISO parts from Drive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet gdown
+          mkdir -p parts
+          gdown --id '1d4sT3FdpY6HW3y_wCpXPUGDD-YyexyB-' -O parts/ZorixOS-1.2-Glass.iso.part-00
+          gdown --id '1FRAwgoxisMfgUPifZ68A9LzIhh0eI9b_' -O parts/ZorixOS-1.2-Glass.iso.part-01
+          gdown --id '1FcPpT_ysasnNj0ty-2sA_L3a-RgcAzI3' -O parts/ZorixOS-1.2-Glass.iso.part-02
+          gdown --id '17KMmDEM4Uth7sq7575u4xDRSkjWgsp-3' -O parts/ZorixOS-1.2-Glass.iso.part-03
+          gdown --id '1BxeoIK9nVH8SHXYoonCKRFwzU7zvOhK9' -O parts/ZorixOS-1.2-Glass.iso.part-04
+          test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-00)" = 104857600
+          test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-01)" = 104857600
+          test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-02)" = 104857600
+          test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-03)" = 104857600
+          test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-04)" = 27262976
+
+      - name: Reconstruct and patch Zorix OS 1.2.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat parts/ZorixOS-1.2-Glass.iso.part-* > ZorixOS-1.2-Glass.iso
+          echo '00dc624c1b817cd1e08c1de074cbb0ae8daf73213bb388f176757950ef07550b  ZorixOS-1.2-Glass.iso' | sha256sum -c -
+          echo 'The source repository contains the 1.2.1 boot fix and local reproducible build metadata.'
+          echo 'The final 1.2.1 ISO is produced by the verified local build and attached to the release by the maintainer workflow.'
+          echo 'ERROR: this workflow intentionally does not relabel the old 1.2 binary as 1.2.1.'
+          echo 'Use the locally built 1.2.1 ISO from the release publishing path instead.'
+          exit 2
+
+      - name: Publish release
+        if: ${{ false }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.2.1 ZorixOS-1.2.1-Glass.iso ZorixOS-1.2.1-Glass.iso.sha256 --title 'Zorix OS 1.2.1 Glass Live' --notes 'Boot reliability update.'
