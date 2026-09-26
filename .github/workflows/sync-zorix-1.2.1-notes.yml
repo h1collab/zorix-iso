@@ -1,0 +1,20 @@
+name: Sync Zorix 1.2.1 release notes
+
+on:
+  push:
+    paths:
+      - '.github/workflows/sync-zorix-1.2.1-notes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update release notes only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit v1.2.1 --title 'Zorix OS 1.2.1 Glass Live' --notes-file release/1.2.1/README.md
