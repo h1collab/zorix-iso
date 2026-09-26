@@ -141,3 +141,4 @@ jobs:
           else
             gh release create v1.2.1               ZorixOS-1.2.1-Glass.iso               ZorixOS-1.2.1-Glass.iso.sha256               --title 'Zorix OS 1.2.1 Glass Live'               --notes-file release/1.2.1/README.md
           fi
+          gh release edit v1.2.1 --title 'Zorix OS 1.2.1 Glass Live' --notes-file release/1.2.1/README.md
