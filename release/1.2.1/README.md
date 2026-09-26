@@ -12,7 +12,7 @@ The boot splash now writes the full framebuffer only once and updates only a sma
 
 - File: `ZorixOS-1.2.1-Glass.iso`
 - Size: 446,693,376 bytes (~426 MiB)
-- SHA-256: `da508b8e836b8c80664a003c35259568d100a3e0e700d47b3833ee9bd9507f95`
+- SHA-256: `343f8e11fb162dd260a352aafeef4d656385b3634b0e463f44300da50dbad0d9`
 - Firmware: x86-64 UEFI only
 - Secure Boot: not supported/validated
 - Kernel: unmodified Debian `6.12.96+deb13-amd64`
