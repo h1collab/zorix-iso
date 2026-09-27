@@ -1,0 +1,5 @@
+QWidget { font-size: 11pt; }
+#sidebarApp { background: #07111F; color: #EAF5FF; }
+QPushButton { min-height: 34px; padding: 4px 14px; border-radius: 8px; }
+QPushButton:hover { background: rgba(40,130,255,0.14); }
+QLineEdit, QComboBox { min-height: 32px; padding: 3px 8px; border-radius: 7px; }

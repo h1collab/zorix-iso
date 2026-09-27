@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+LOG=/var/log/zorix/installer-launch.log
+mkdir -p /var/log/zorix 2>/dev/null || true
+mem_kib=$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+mem_gib=$((mem_kib/1024/1024))
+uefi=no; [ -d /sys/firmware/efi ] && uefi=yes
+disks=$(lsblk -dno NAME,SIZE,TYPE,MODEL 2>/dev/null | awk '$3=="disk"{print "/dev/"$1"  "$2"  "$4}' | head -n 12)
+[ -n "$disks" ] || disks="No writable disks detected."
+power="unknown"
+if [ -r /sys/class/power_supply/AC/online ]; then power=$(cat /sys/class/power_supply/AC/online); fi
+summary="Zorix OS Installer preflight
+
+UEFI boot: $uefi
+Memory: ${mem_gib} GiB
+AC power: $power
+
+Detected disks:
+$disks
+
+Back up important data before continuing. Partition changes can destroy data."
+if command -v zenity >/dev/null 2>&1; then
+  zenity --question --width=620 --height=420 --title="Install Zorix OS" --ok-label="Open installer" --cancel-label="Cancel" --text="$summary" || exit 0
+else
+  printf '%s\nContinue? [y/N] ' "$summary"
+  read ans
+  case "$ans" in y|Y|yes|YES) :;; *) exit 0;; esac
+fi
+if [ "$uefi" != yes ]; then
+  command -v zenity >/dev/null 2>&1 && zenity --error --title="Zorix Installer" --text="This image currently supports UEFI installation only." || true
+  exit 2
+fi
+if [ "$mem_gib" -lt 3 ]; then
+  command -v zenity >/dev/null 2>&1 && zenity --warning --title="Low memory" --text="At least 4 GiB is recommended while installing." || true
+fi
+echo "$(date -Is) launching Calamares" >>"$LOG"
+exec sudo -n /usr/bin/calamares -d

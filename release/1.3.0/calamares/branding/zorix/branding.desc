@@ -1,0 +1,35 @@
+componentName: zorix
+welcomeStyleCalamares: false
+welcomeExpandingLogo: true
+windowExpanding: normal
+windowSize: 980px,680px
+windowPlacement: center
+sidebar: widget
+navigation: widget
+strings:
+  productName: "Zorix OS"
+  shortProductName: "Zorix"
+  version: "1.3.0"
+  shortVersion: "1.3"
+  versionedName: "Zorix OS 1.3.0"
+  shortVersionedName: "Zorix 1.3"
+  bootloaderEntryName: "Zorix OS"
+  productUrl: "https://github.com/h1collab/zorix-iso"
+  supportUrl: "https://github.com/h1collab/zorix-iso"
+  knownIssuesUrl: "https://github.com/h1collab/zorix-iso/issues"
+  releaseNotesUrl: "https://github.com/h1collab/zorix-iso/releases"
+  donateUrl: ""
+images:
+  productIcon: "zorix-logo.png"
+  productLogo: "zorix-logo.png"
+  productWelcome: "zorix-logo.png"
+style:
+  SidebarBackground: "#07111F"
+  SidebarText: "#EAF5FF"
+  SidebarTextCurrent: "#FFFFFF"
+  SidebarBackgroundCurrent: "#1266D4"
+slideshow: []
+uploadServer:
+  type: none
+  url: ""
+  sizeLimit: -1
