@@ -1,14 +1,21 @@
 #!/bin/sh
 set -eu
+AUTO=0
+[ "${1:-}" = "--autostart" ] && AUTO=1
 LOG=/var/log/zorix/installer-launch.log
 mkdir -p /var/log/zorix 2>/dev/null || true
+log(){ printf '%s %s\n' "$(date -Is)" "$*" >>"$LOG"; }
+log "installer preflight start auto=$AUTO"
+if command -v sudo >/dev/null 2>&1 && [ -x /usr/bin/zorix-storage-rescan ]; then
+  sudo -n /usr/bin/zorix-storage-rescan >>"$LOG" 2>&1 || log "storage rescan helper returned non-zero"
+fi
 mem_kib=$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
 mem_gib=$((mem_kib/1024/1024))
 uefi=no; [ -d /sys/firmware/efi ] && uefi=yes
-disks=$(lsblk -dno NAME,SIZE,TYPE,MODEL 2>/dev/null | awk '$3=="disk"{print "/dev/"$1"  "$2"  "$4}' | head -n 12)
-[ -n "$disks" ] || disks="No writable disks detected."
+disks=$(lsblk -dnp -o NAME,SIZE,TYPE,TRAN,MODEL 2>/dev/null | awk '$3=="disk"{print}' | head -n 16 || true)
+[ -n "$disks" ] || disks="No writable disks detected after AHCI/SATA/NVMe rescan."
 power="unknown"
-if [ -r /sys/class/power_supply/AC/online ]; then power=$(cat /sys/class/power_supply/AC/online); fi
+for ac in /sys/class/power_supply/*/online; do [ -r "$ac" ] && { power=$(cat "$ac" 2>/dev/null || echo unknown); break; }; done
 summary="Zorix OS Installer preflight
 
 UEFI boot: $uefi
@@ -19,19 +26,28 @@ Detected disks:
 $disks
 
 Back up important data before continuing. Partition changes can destroy data."
-if command -v zenity >/dev/null 2>&1; then
-  zenity --question --width=620 --height=420 --title="Install Zorix OS" --ok-label="Open installer" --cancel-label="Cancel" --text="$summary" || exit 0
-else
-  printf '%s\nContinue? [y/N] ' "$summary"
-  read ans
-  case "$ans" in y|Y|yes|YES) :;; *) exit 0;; esac
-fi
+log "uefi=$uefi mem_gib=$mem_gib disks=$(printf '%s' "$disks" | tr '\n' ';')"
 if [ "$uefi" != yes ]; then
   command -v zenity >/dev/null 2>&1 && zenity --error --title="Zorix Installer" --text="This image currently supports UEFI installation only." || true
   exit 2
 fi
-if [ "$mem_gib" -lt 3 ]; then
-  command -v zenity >/dev/null 2>&1 && zenity --warning --title="Low memory" --text="At least 4 GiB is recommended while installing." || true
+if printf '%s' "$disks" | grep -q '^No writable disks'; then
+  command -v zenity >/dev/null 2>&1 && zenity --error --width=620 --title="Zorix Installer - no disk" --text="$summary
+
+SATA/AHCI/NVMe drivers were rescanned. Check the VM storage controller and attach a writable virtual disk." || true
+  exit 3
 fi
-echo "$(date -Is) launching Calamares" >>"$LOG"
+if [ "$mem_gib" -lt 3 ]; then
+  command -v zenity >/dev/null 2>&1 && zenity --warning --title="Low memory" --text="At least 4 GiB is recommended while installing; 8 GiB is preferred." || true
+fi
+if [ "$AUTO" -eq 0 ]; then
+  if command -v zenity >/dev/null 2>&1; then
+    zenity --question --width=620 --height=420 --title="Install Zorix OS" --ok-label="Open installer" --cancel-label="Cancel" --text="$summary" || exit 0
+  else
+    printf '%s\nContinue? [y/N] ' "$summary"
+    read ans
+    case "$ans" in y|Y|yes|YES) :;; *) exit 0;; esac
+  fi
+fi
+log "launching Calamares"
 exec sudo -n /usr/bin/calamares -d
