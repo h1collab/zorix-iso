@@ -17,7 +17,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       VALIDATED_RUN_ID: 36304936929
       VALIDATED_SHA: c52bb83589b1177974da7fae74fbb56a5e7e0232
-      EXPECTED_SHA256: 3690a5c8363039cd1e0d7967b911cede94daae49ea0a30a9beeebdf3afec995e
+      EXPECTED_SHA256: f9ab0d87b361260dfa9bb41bdefa9306a661016cd6d02c981234e80225cc417b
       EXPECTED_BYTES: 980418560
     steps:
       - uses: actions/checkout@v4
