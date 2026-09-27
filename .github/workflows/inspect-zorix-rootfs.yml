@@ -1,0 +1,42 @@
+name: Inspect Zorix 1.2.2 rootfs
+
+on:
+  push:
+    paths:
+      - '.github/workflows/inspect-zorix-rootfs.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect current release rootfs
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools p7zip-full zstd cpio
+          curl -fL --retry 5 -o base.iso https://github.com/h1collab/zorix-iso/releases/download/v1.2.2/ZorixOS-1.2.2-Glass.iso
+          mkdir -p work rootfs
+          7z e -y base.iso EFI.IMG -owork >/dev/null
+          mcopy -i work/EFI.IMG ::ZORIX/LIVE.CPI work/LIVE.CPI
+          sudo bash -c 'cd rootfs && zstd -dc ../work/LIVE.CPI | cpio -idm --no-absolute-filenames >/dev/null 2>&1'
+          sudo chown -R "$(id -u):$(id -g)" rootfs
+          echo '=== /usr/lib/zorix ==='
+          find rootfs/usr/lib/zorix -maxdepth 1 -type f -printf '%f %s bytes
+' | sort
+          echo '=== glass-session.sh ==='
+          sed -n '1,260p' rootfs/usr/lib/zorix/glass-session.sh || true
+          echo '=== glass_server.py head ==='
+          sed -n '1,320p' rootfs/usr/lib/zorix/glass_server.py || true
+          echo '=== app launcher references ==='
+          grep -RniE 'launcher|launch|Terminal|Settings|Files|Software|GPU|Windows|installer' rootfs/usr/share/zorix/glass rootfs/usr/lib/zorix/glass_server.py | head -n 220 || true
+          echo '=== apt sources ==='
+          cat rootfs/etc/apt/sources.list 2>/dev/null || true
+          find rootfs/etc/apt/sources.list.d -type f -maxdepth 1 -print -exec cat {} \; 2>/dev/null || true
+          echo '=== package tools ==='
+          for c in apt-get dpkg systemctl Xorg Xvfb openbox chromium xauth picom lightdm nmcli pipewire calamares grub-install update-initramfs; do
+            if [ -e "rootfs/usr/bin/$c" ] || [ -e "rootfs/usr/sbin/$c" ] || [ -e "rootfs/bin/$c" ] || [ -e "rootfs/sbin/$c" ]; then echo "$c present"; else echo "$c missing"; fi
+          done
+          echo '=== rootfs size ==='
+          du -sh rootfs
