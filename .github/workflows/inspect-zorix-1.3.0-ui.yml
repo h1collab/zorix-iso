@@ -38,10 +38,8 @@ jobs:
           mkdir -p inspect work/rootfs
           7z e -y current.iso EFI.IMG -owork >/dev/null
           mcopy -i work/EFI.IMG ::ZORIX/LIVE.CPI work/LIVE.CPI
-          (
-            cd work/rootfs
-            zstd -dc ../LIVE.CPI | cpio -idm --no-absolute-filenames >/dev/null 2>&1
-          )
+          sudo bash -c 'cd work/rootfs && zstd -dc ../LIVE.CPI | cpio -idm --no-absolute-filenames >/dev/null 2>&1'
+          sudo chown -R "$(id -u):$(id -g)" work/rootfs
           mkdir -p inspect/glass inspect/runtime
           cp -a work/rootfs/usr/share/zorix/glass/. inspect/glass/
           for f in glass_server.py glass-session.sh live-boot.sh; do
