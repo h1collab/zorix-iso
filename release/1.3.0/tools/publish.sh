@@ -4,7 +4,9 @@ export DEBIAN_FRONTEND=noninteractive
 CHROOT_PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 sudo apt-get update -qq
-sudo apt-get install -y -qq mtools p7zip-full zstd cpio gcc curl
+sudo apt-get install -y -qq mtools p7zip-full zstd cpio gcc curl python3-yaml
+
+python3 release/1.3.0/tools/validate_installer_config.py
 
 BASE=ZorixOS-1.3.0-base.iso
 BASE_URL=https://github.com/h1collab/zorix-iso/releases/download/v1.3.0
