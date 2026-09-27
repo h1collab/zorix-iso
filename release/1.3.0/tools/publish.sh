@@ -20,6 +20,18 @@ mkdir -p work rootfs build-docs scratch
 mcopy -i work/EFI.IMG ::ZORIX/LIVE.CPI work/LIVE.CPI
 mcopy -i work/EFI.IMG ::ZORIX/LINUX.EFI work/LINUX.EFI
 mcopy -i work/EFI.IMG ::EFI/BOOT/BOOTX64.EFI work/BOOTX64.EFI
+python3 - <<'PY'
+from pathlib import Path
+p=Path('work/BOOTX64.EFI')
+data=p.read_bytes()
+for old,new in [
+    ('1.2.2'.encode('utf-16le'),'1.3.0'.encode('utf-16le')),
+    (b'1.2.2',b'1.3.0'),
+]:
+    data=data.replace(old,new)
+p.write_bytes(data)
+assert '1.3.0'.encode('utf-16le') in data or b'1.3.0' in data, 'UEFI loader version patch missing'
+PY
 sudo bash -c 'cd rootfs && zstd -dc ../work/LIVE.CPI | cpio -idm --no-absolute-filenames >/dev/null 2>&1'
 sudo chown -R "$(id -u):$(id -g)" rootfs
 
