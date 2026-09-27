@@ -173,8 +173,9 @@ sudo python3 release/1.2.1/tools/build_iso.py \
   --scratch scratch \
   --docs build-docs
 
-sha256sum ZorixOS-1.3.0-Glass-Installer.iso | tee ZorixOS-1.3.0-Glass-Installer.iso.sha256
-ls -lh ZorixOS-1.3.0-Glass-Installer.iso
+sudo chown "$(id -u):$(id -g)" ZorixOS-1.3.0-Glass-Installer.iso ZorixOS-1.3.0-Glass-Installer.iso.sha256
+sha256sum -c ZorixOS-1.3.0-Glass-Installer.iso.sha256
+ls -lh ZorixOS-1.3.0-Glass-Installer.iso ZorixOS-1.3.0-Glass-Installer.iso.sha256
 
 if gh release view v1.3.0 >/dev/null 2>&1; then
   gh release upload v1.3.0 ZorixOS-1.3.0-Glass-Installer.iso ZorixOS-1.3.0-Glass-Installer.iso.sha256 --clobber
