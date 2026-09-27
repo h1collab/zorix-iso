@@ -10,20 +10,39 @@ openbox --config-file /usr/share/zorix/glass-openbox.xml >"$HOME/.config/zorix/o
 obpid=$!
 sleep .10
 compid=
-# The portable framebuffer path already copies every frame in software. Running
-# a second compositor there adds latency without improving the Glass shell.
-# Native Xorg gets Picom for stable redraw, shadows and tear reduction.
+audio_pids=
+installerpid=
 if [ "${ZORIX_RENDER_MODE:-portable}" != portable ]; then
   picom --config /usr/share/zorix/picom.conf --daemon >"$HOME/.config/zorix/picom.log" 2>&1 || true
   compid=$(pgrep -n picom 2>/dev/null || true)
 fi
-cleanup(){ [ -n "$compid" ] && kill "$compid" 2>/dev/null || true; kill "$obpid" 2>/dev/null || true; wait "$obpid" 2>/dev/null || true; }
+for cmd in pipewire pipewire-pulse wireplumber; do
+  if command -v "$cmd" >/dev/null 2>&1; then
+    "$cmd" >>"$HOME/.config/zorix/audio-session.log" 2>&1 &
+    audio_pids="$audio_pids $!"
+  fi
+done
+cleanup(){
+  [ -n "$installerpid" ] && kill "$installerpid" 2>/dev/null || true
+  for pid in $audio_pids; do kill "$pid" 2>/dev/null || true; done
+  [ -n "$compid" ] && kill "$compid" 2>/dev/null || true
+  kill "$obpid" 2>/dev/null || true
+  wait "$obpid" 2>/dev/null || true
+}
 trap cleanup EXIT HUP INT TERM
 sleep .22
 if ! kill -0 "$obpid" 2>/dev/null; then
   echo 'Openbox failed to start:' >>"$HOME/.config/zorix/glass.log"
   tail -n 80 "$HOME/.config/zorix/openbox.log" >>"$HOME/.config/zorix/glass.log" 2>/dev/null || true
   exit 70
+fi
+if [ -e /etc/zorix-live ] && command -v zorix-installer >/dev/null 2>&1; then
+  marker="${XDG_RUNTIME_DIR:-/tmp}/zorix-installer-autostarted"
+  if [ ! -e "$marker" ]; then
+    : >"$marker"
+    ( sleep 1.5; /usr/bin/zorix-installer --autostart ) >>"$HOME/.config/zorix/installer-autostart.log" 2>&1 &
+    installerpid=$!
+  fi
 fi
 export CHROME_LOG_FILE="$HOME/.config/zorix/chromium.log"
 python3 /usr/lib/zorix/glass_server.py >>"$HOME/.config/zorix/glass.log" 2>&1
