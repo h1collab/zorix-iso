@@ -6,9 +6,13 @@ CHROOT_PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 sudo apt-get update -qq
 sudo apt-get install -y -qq mtools p7zip-full zstd cpio gcc curl
 
-BASE=ZorixOS-1.2.2-Glass.iso
-curl -fL --retry 5 -o "$BASE" https://github.com/h1collab/zorix-iso/releases/download/v1.2.2/ZorixOS-1.2.2-Glass.iso
-echo '747eee3954b2cf70131cebc42e81e4d86236921e87dfd28df3204b72a15cf341  ZorixOS-1.2.2-Glass.iso' | sha256sum -c -
+BASE=ZorixOS-1.3.0-base.iso
+BASE_URL=https://github.com/h1collab/zorix-iso/releases/download/v1.3.0
+curl -fL --retry 5 -o "$BASE" "$BASE_URL/ZorixOS-1.3.0-Glass-Installer.iso"
+curl -fL --retry 5 -o base.sha256 "$BASE_URL/ZorixOS-1.3.0-Glass-Installer.iso.sha256"
+expected_sha="$(awk 'NF { print $1; exit }' base.sha256)"
+test -n "$expected_sha"
+printf '%s  %s\n' "$expected_sha" "$BASE" | sha256sum -c -
 
 rm -rf work rootfs build-docs scratch
 mkdir -p work rootfs build-docs scratch
