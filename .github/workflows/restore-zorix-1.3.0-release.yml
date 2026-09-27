@@ -15,10 +15,10 @@ jobs:
     timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
-      VALIDATED_RUN_ID: 36304936929
-      VALIDATED_SHA: c52bb83589b1177974da7fae74fbb56a5e7e0232
-      EXPECTED_SHA256: f9ab0d87b361260dfa9bb41bdefa9306a661016cd6d02c981234e80225cc417b
-      EXPECTED_BYTES: 980418560
+      VALIDATED_RUN_ID: 36319349718
+      VALIDATED_SHA: d5ecbf4b75be83c41fdaf03f787143129d5acad8
+      EXPECTED_SHA256: cca16c73c002b7f748f97eaaaf45cddd40bec6ead638e6377be5c993e96ef82e
+      EXPECTED_BYTES: 1156579328
     steps:
       - uses: actions/checkout@v4
 
