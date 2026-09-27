@@ -76,14 +76,13 @@ chmod 0755 rootfs/usr/sbin/policy-rc.d
 cp -L /etc/resolv.conf rootfs/etc/resolv.conf
 
 cleanup_mounts() {
-  sudo umount -R rootfs/dev 2>/dev/null || true
-  sudo umount -R rootfs/proc 2>/dev/null || true
-  sudo umount -R rootfs/sys 2>/dev/null || true
+  sudo umount -l rootfs/proc 2>/dev/null || true
 }
 trap cleanup_mounts EXIT
-sudo mount --rbind /dev rootfs/dev
+# Package installation only needs proc here. Avoid rbind-mounting /dev or /sys:
+# recursive pseudo-filesystems can leak into the packed Live root and expose
+# unreadable kernel pseudo-files.
 sudo mount -t proc proc rootfs/proc
-sudo mount --rbind /sys rootfs/sys
 
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get update'
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'cd /tmp && apt-get download diffutils libc-bin'
