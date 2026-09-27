@@ -1,0 +1,12 @@
+#!/bin/sh
+# Safe storage discovery refresh for the Live installer. No partition writes.
+set -eu
+for m in scsi_mod sd_mod libata ahci ata_piix nvme nvme_core virtio_blk virtio_scsi uas usb_storage; do
+  modprobe "$m" 2>/dev/null || true
+done
+for host in /sys/class/scsi_host/host*; do
+  [ -w "$host/scan" ] && printf '%s\n' '- - -' >"$host/scan" 2>/dev/null || true
+done
+udevadm trigger --subsystem-match=block --action=add 2>/dev/null || true
+udevadm settle --timeout=10 2>/dev/null || true
+lsblk -dnp -o NAME,SIZE,TYPE,TRAN,MODEL 2>/dev/null || true
