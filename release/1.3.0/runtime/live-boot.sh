@@ -6,6 +6,8 @@ fbpid=
 xpid=
 inputpid=
 splash=
+nmpid=
+btpid=
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8
 mkdir -p /run/zorix /run/dbus /run/user/1000 /run/zorix-fonts /run/fontconfig /var/log/zorix /var/lib/dbus /tmp/.X11-unix /etc/modprobe.d
 chmod 1777 /tmp/.X11-unix
@@ -52,7 +54,7 @@ bounded 3s python3 /usr/lib/zorix/ui_typeface.py /run/zorix-fonts/ZorixSans.ttf 
 python3 /usr/lib/zorix/boot_splash.py >/var/log/zorix/splash.log 2>&1 &
 splash=$!
 stage 'Loading input and base modules'
-for m in evdev usbhid hid_generic xhci_pci ehci_pci uhci_hcd i8042 atkbd psmouse virtio_pci virtio_net e1000 e1000e r8169; do bounded 2s modprobe "$m" 2>/dev/null || true; done
+for m in evdev usbhid hid_generic xhci_pci ehci_pci uhci_hcd i8042 atkbd psmouse virtio_pci virtio_net e1000 e1000e r8169 scsi_mod sd_mod libata ahci ata_piix nvme nvme_core virtio_blk virtio_scsi uas usb_storage cfg80211 rfkill bluetooth btusb; do bounded 2s modprobe "$m" 2>/dev/null || true; done
 if [ "$virt" != virtualbox ] || [ "$mode" = native ]; then
  stage 'Loading optional graphics modules'
  for m in virtio_gpu qxl hyperv_drm hyperv_fb drm drm_kms_helper simpledrm vmwgfx vboxvideo vboxguest vboxsf; do bounded 2s modprobe "$m" 2>/dev/null || true; done
@@ -62,7 +64,12 @@ fi
 stage 'Starting device manager'
 bounded 4s /usr/lib/systemd/systemd-udevd --daemon || true
 bounded 4s udevadm trigger --action=add || true
-udevadm settle --timeout=6 || true
+udevadm settle --timeout=8 || true
+stage 'Scanning storage controllers'
+for host in /sys/class/scsi_host/host*; do [ -w "$host/scan" ] && printf '%s\n' '- - -' >"$host/scan" 2>/dev/null || true; done
+bounded 4s udevadm trigger --subsystem-match=block --action=add || true
+udevadm settle --timeout=8 || true
+lsblk -dno NAME,SIZE,TYPE,TRAN,MODEL 2>/dev/null || true
 stage 'Starting local services'
 dbus-uuidgen --ensure=/etc/machine-id || true
 ln -sf /etc/machine-id /var/lib/dbus/machine-id
@@ -70,7 +77,22 @@ bounded 4s dbus-daemon --system --fork || true
 bounded 5s fc-cache -f /run/zorix-fonts || true
 stage 'Preparing network'
 ip link set lo up || true
-for p in /sys/class/net/*; do name=${p##*/}; [ "$name" = lo ] && continue; [ -d "$p/wireless" ] && continue; ip link set "$name" up || continue; busybox udhcpc -i "$name" -n -q -t 2 -T 2 -s /usr/lib/zorix/dhcp.sh >"/var/log/zorix/dhcp-$name.log" 2>&1 & done
+if command -v NetworkManager >/dev/null 2>&1; then
+  mkdir -p /run/NetworkManager
+  NetworkManager --no-daemon >/var/log/zorix/networkmanager.log 2>&1 &
+  nmpid=$!
+  sleep .5
+  kill -0 "$nmpid" 2>/dev/null || nmpid=
+fi
+if [ -z "$nmpid" ]; then
+  for p in /sys/class/net/*; do name=${p##*/}; [ "$name" = lo ] && continue; [ -d "$p/wireless" ] && continue; ip link set "$name" up || continue; busybox udhcpc -i "$name" -n -q -t 2 -T 2 -s /usr/lib/zorix/dhcp.sh >"/var/log/zorix/dhcp-$name.log" 2>&1 & done
+fi
+if command -v bluetoothd >/dev/null 2>&1; then
+  bluetoothd -n >/var/log/zorix/bluetooth.log 2>&1 &
+  btpid=$!
+  sleep .2
+  kill -0 "$btpid" 2>/dev/null || btpid=
+fi
 recovery(){ stage 'Recovery console'; stop_splash; printf '\033[2J\033[H\033[?25h' >/dev/tty1 2>/dev/null || true; exec /usr/bin/zorix-recovery-shell /dev/tty1; }
 missing=0
 for c in Xvfb Xorg openbox chromium python3 xauth xdpyinfo dbus-run-session zorix-run-user timeout; do command -v "$c" >/dev/null 2>&1 || { echo "FATAL: required desktop component missing: $c"; missing=1; }; done
