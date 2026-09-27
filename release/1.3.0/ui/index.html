@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Zorix Glass 1.2</title>
+<title>Zorix Glass 1.3</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -29,6 +29,12 @@
     <button class="menutext" data-panel="support">Help</button>
   </div>
   <div class="menu-right">
+    <div class="system-status-cluster" aria-label="System status">
+      <button id="wifi-status" class="status-button" data-panel="control" aria-label="Network status"><span data-icon="wifi"></span><small>--</small></button>
+      <button id="bluetooth-status" class="status-button" data-app="bluetooth" aria-label="Bluetooth"><span data-icon="bluetooth"></span></button>
+      <button id="audio-status" class="status-button" data-app="audio" aria-label="Audio"><span data-icon="volume"></span></button>
+      <button id="battery-status" class="status-button hidden-status" data-panel="control" aria-label="Battery status"><span data-icon="battery"></span><small>--</small></button>
+    </div>
     <button id="spotlightButton" class="menu-icon" data-panel="launcher" aria-label="Search"><span data-icon="search"></span></button>
     <button class="menu-icon" data-panel="performance" aria-label="System activity"><span data-icon="pulse"></span></button>
     <button class="menu-icon" data-panel="control" aria-label="Control Center"><span data-icon="sliders"></span></button>
@@ -95,6 +101,7 @@
     <button data-panel="notes" aria-label="Notes"><span class="appicon amber" data-icon="note"></span><small>Notes</small></button>
     <button data-panel="tasks" aria-label="Flow Board"><span class="appicon mint" data-icon="check"></span><small>Flow</small></button>
     <button data-app="terminal" aria-label="Terminal"><span class="appicon dark" data-icon="terminal"></span><small>Terminal</small></button>
+    <span id="dock-dynamic" class="dock-dynamic"></span>
     <i class="dock-divider"></i>
     <button data-panel="launcher" aria-label="Applications"><span class="appicon soft" data-icon="grid"></span><small>Apps</small></button>
     <button data-panel="compatibility" aria-label="Windows and GPU"><span class="appicon violet" data-icon="chip"></span><small>Play</small></button>
@@ -106,7 +113,7 @@
 <div class="overlay hidden" id="overlay">
   <section class="window liquid-glass" id="window" role="dialog" aria-modal="true" aria-labelledby="window-title">
     <div class="window-sheen"></div>
-    <header class="titlebar">
+    <header class="titlebar" id="window-drag-handle">
       <div class="window-controls"><button class="close-dot" id="close" aria-label="Close"></button><span class="min-dot"></span><span class="zoom-dot"></span></div>
       <h2 id="window-title"></h2>
       <span class="window-label">ZORIX</span>
