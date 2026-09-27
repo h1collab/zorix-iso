@@ -74,8 +74,12 @@ services = yaml.safe_load((MOD / "services-systemd.conf").read_text())
 units = {x.get("name"): x for x in services.get("units", []) if isinstance(x, dict)}
 if not units.get("lightdm.service", {}).get("mandatory"):
     fail("lightdm.service must remain mandatory")
-for unit in ("NetworkManager.service", "fstrim.timer", "systemd-timesyncd.service"):
+for unit in ("NetworkManager.service", "bluetooth.service", "fstrim.timer", "systemd-timesyncd.service"):
     if unit not in units:
         fail(f"required installed-system service missing: {unit}")
 
 print("PASS: Zorix Calamares configuration invariants validated")
+
+preuser_text = (MOD / "preuser.conf").read_text()
+if "20-zorix-live.conf" not in preuser_text:
+    fail("installed-system cleanup must remove the Live autologin configuration")
