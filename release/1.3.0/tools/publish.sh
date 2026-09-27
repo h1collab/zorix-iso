@@ -105,7 +105,7 @@ sudo tee rootfs/etc/default/earlyoom >/dev/null <<'EOF'
 EARLYOOM_ARGS="-m 6,3 -s 6,3 -r 3600 --avoid '(^|/)(init|systemd|Xorg|Xvfb|lightdm)$' --prefer '(^|/)(chromium|chrome_crashpad)$'"
 EOF
 
-rm -f rootfs/usr/sbin/policy-rc.d
+sudo rm -f rootfs/usr/sbin/policy-rc.d
 cleanup_mounts
 trap - EXIT
 sudo chown -R "$(id -u):$(id -g)" rootfs
