@@ -115,6 +115,8 @@ p=root/'usr/lib/zorix/live-boot.sh'
 if p.exists():
     text=p.read_text(errors='replace')
     text=text.replace('/usr/lib/zorix/glass-session.sh','/usr/bin/zorix-session-supervisor')
+    text=text.replace('Zorix OS 1.2.2 boot preparation','Zorix OS 1.3.0 boot preparation')
+    text=text.replace("stage(){ printf '%s\\n' \"$1\" >/run/zorix/stage; printf 'STAGE: %s\\n' \"$1\"; }", "stage(){ printf '%s\\n' \"$1\" >/run/zorix/stage; printf 'STAGE: %s\\n' \"$1\"; printf 'ZORIX_STAGE:%s\\n' \"$1\" >/dev/ttyS0 2>/dev/null || true; }")
     p.write_text(text)
 
 g=root/'usr/lib/zorix/glass_server.py'
