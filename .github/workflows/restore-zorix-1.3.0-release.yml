@@ -1,0 +1,79 @@
+name: Restore Zorix 1.3.0 Release
+
+on:
+  push:
+    paths:
+      - '.github/workflows/restore-zorix-1.3.0-release.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VALIDATED_RUN_ID: 36304936929
+      VALIDATED_SHA: c52bb83589b1177974da7fae74fbb56a5e7e0232
+      EXPECTED_SHA256: 3690a5c8363039cd1e0d7967b911cede94daae49ea0a30a9beeebdf3afec995e
+      EXPECTED_BYTES: 980418560
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download validated candidate
+        run: |
+          set -euxo pipefail
+          mkdir -p candidate
+          gh run download "$VALIDATED_RUN_ID" \
+            -n "zorix-1.3.0-candidate-$VALIDATED_SHA" \
+            -D candidate
+          test -f candidate/ZorixOS-1.3.0-Glass-Installer.iso
+          test -f candidate/ZorixOS-1.3.0-Glass-Installer.iso.sha256
+          echo "$EXPECTED_SHA256  candidate/ZorixOS-1.3.0-Glass-Installer.iso" | sha256sum -c -
+          test "$(stat -c%s candidate/ZorixOS-1.3.0-Glass-Installer.iso)" = "$EXPECTED_BYTES"
+          (
+            cd candidate
+            sha256sum -c ZorixOS-1.3.0-Glass-Installer.iso.sha256
+          )
+
+      - name: Stage rollback-safe release assets
+        run: |
+          set -euxo pipefail
+          cp candidate/ZorixOS-1.3.0-Glass-Installer.iso \
+            "ZorixOS-1.3.0-Glass-Installer-$VALIDATED_SHA.iso"
+          cp candidate/ZorixOS-1.3.0-Glass-Installer.iso.sha256 \
+            "ZorixOS-1.3.0-Glass-Installer-$VALIDATED_SHA.iso.sha256"
+          gh release upload v1.3.0 \
+            "ZorixOS-1.3.0-Glass-Installer-$VALIDATED_SHA.iso" \
+            "ZorixOS-1.3.0-Glass-Installer-$VALIDATED_SHA.iso.sha256" \
+            --clobber
+
+      - name: Restore canonical assets
+        run: |
+          set -euxo pipefail
+          gh release upload v1.3.0 \
+            candidate/ZorixOS-1.3.0-Glass-Installer.iso \
+            candidate/ZorixOS-1.3.0-Glass-Installer.iso.sha256 \
+            --clobber
+
+      - name: Verify canonical release
+        run: |
+          set -euxo pipefail
+          iso_json="$(gh api repos/${GITHUB_REPOSITORY}/releases/tags/v1.3.0 \
+            --jq '.assets[] | select(.name=="ZorixOS-1.3.0-Glass-Installer.iso") | [.size,.digest] | @tsv')"
+          test -n "$iso_json"
+          bytes="$(printf '%s\n' "$iso_json" | cut -f1)"
+          digest="$(printf '%s\n' "$iso_json" | cut -f2)"
+          test "$bytes" = "$EXPECTED_BYTES"
+          test "$digest" = "sha256:$EXPECTED_SHA256"
+          gh release edit v1.3.0 \
+            --title 'Zorix OS 1.3.0 Glass + Installer' \
+            --notes-file release/1.3.0/README.md
+
+      - name: Remove temporary fallback after verification
+        run: |
+          set -euxo pipefail
+          gh release delete-asset v1.3.0 "ZorixOS-1.3.0-Glass-Installer-$VALIDATED_SHA.iso" --yes
+          gh release delete-asset v1.3.0 "ZorixOS-1.3.0-Glass-Installer-$VALIDATED_SHA.iso.sha256" --yes
