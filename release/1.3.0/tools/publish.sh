@@ -61,6 +61,7 @@ DesktopNames=Zorix;
 EOF
 
 mkdir -p rootfs/etc/sysctl.d rootfs/etc/sudoers.d
+rm -f rootfs/etc/sudoers.d/zorix-live-installer
 cat >rootfs/etc/sysctl.d/90-zorix-desktop.conf <<'EOF'
 vm.swappiness=20
 vm.vfs_cache_pressure=75
