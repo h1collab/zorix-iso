@@ -1,0 +1,94 @@
+name: Smoke Zorix 1.3.0 Candidate
+
+on:
+  workflow_run:
+    workflows: ["Build Zorix 1.3.0 Candidate"]
+    types: [completed]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: smoke-zorix-1.3.0-candidate
+  cancel-in-progress: true
+
+jobs:
+  qemu:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install QEMU and OVMF
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 ovmf
+
+      - name: Download candidate artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: zorix-1.3.0-candidate-*
+          path: candidate
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Verify candidate checksum
+        working-directory: candidate
+        run: |
+          set -euxo pipefail
+          sha256sum -c ZorixOS-1.3.0-Glass-Installer.iso.sha256
+          stat -c 'ISO bytes: %s' ZorixOS-1.3.0-Glass-Installer.iso
+
+      - name: Boot candidate with QEMU UEFI
+        shell: bash
+        run: |
+          set -euo pipefail
+          ISO=candidate/ZorixOS-1.3.0-Glass-Installer.iso
+          if [ -f /usr/share/OVMF/OVMF_CODE_4M.fd ] && [ -f /usr/share/OVMF/OVMF_VARS_4M.fd ]; then
+            CODE=/usr/share/OVMF/OVMF_CODE_4M.fd
+            VARS=/usr/share/OVMF/OVMF_VARS_4M.fd
+          else
+            CODE=/usr/share/OVMF/OVMF_CODE.fd
+            VARS=/usr/share/OVMF/OVMF_VARS.fd
+          fi
+          cp "$VARS" OVMF_VARS.fd
+          : > qemu-serial.log
+          timeout --signal=TERM --kill-after=5s 300s qemu-system-x86_64 \
+            -machine q35,accel=tcg -cpu max -smp 2 -m 4096 \
+            -drive if=pflash,format=raw,readonly=on,file="$CODE" \
+            -drive if=pflash,format=raw,file=OVMF_VARS.fd \
+            -drive media=cdrom,format=raw,readonly=on,file="$ISO" \
+            -boot order=d,menu=off -vga std -display none \
+            -serial file:qemu-serial.log -monitor none -no-reboot -no-shutdown &
+          pid=$!
+          cleanup(){ kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for second in $(seq 1 240); do
+            if grep -Fq 'ZORIX_STAGE:Recovery console' qemu-serial.log; then
+              cat qemu-serial.log >&2
+              exit 1
+            fi
+            if grep -Fq 'ZORIX_STAGE:Launching Zorix Glass (' qemu-serial.log; then
+              grep -Fq 'LIQUID GLASS LIVE 1.3.0' qemu-serial.log
+              echo 'PASS: candidate reached Zorix Glass launch stage under UEFI.'
+              cat qemu-serial.log
+              exit 0
+            fi
+            kill -0 "$pid" 2>/dev/null || { cat qemu-serial.log >&2; exit 1; }
+            sleep 1
+          done
+          echo 'Timed out waiting for Glass launch stage.' >&2
+          cat qemu-serial.log >&2
+          exit 1
+
+      - name: Upload smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zorix-1.3.0-candidate-qemu-smoke
+          path: qemu-serial.log
+          if-no-files-found: warn
+          retention-days: 14
