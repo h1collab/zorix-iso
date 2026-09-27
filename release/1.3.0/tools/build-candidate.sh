@@ -39,6 +39,7 @@ install -m 0755 release/1.2.2/src/boot_splash.py rootfs/usr/lib/zorix/boot_splas
 mkdir -p rootfs/boot rootfs/etc/calamares/modules rootfs/etc/calamares/branding/zorix
 cp work/LINUX.EFI rootfs/boot/vmlinuz-6.12.96+deb13-amd64
 install -m 0755 release/1.3.0/src/zorix-installer rootfs/usr/bin/zorix-installer
+install -m 0755 release/1.3.0/src/zorix-storage-rescan rootfs/usr/bin/zorix-storage-rescan
 install -m 0755 release/1.3.0/src/zorix-session-supervisor.sh rootfs/usr/bin/zorix-session-supervisor
 gcc -O2 -Wall -Wextra release/1.3.0/src/framebuffer_bridge.c -lX11 -o rootfs/usr/bin/zorix-framebuffer
 cat release/1.3.0/src/glass-1.3.css >> rootfs/usr/share/zorix/glass/style.css
@@ -85,7 +86,7 @@ vm.dirty_ratio=15
 fs.inotify.max_user_watches=524288
 EOF
 cat >rootfs/etc/sudoers.d/zorix-live-installer <<'EOF'
-zorix ALL=(root) NOPASSWD: /usr/bin/calamares
+zorix ALL=(root) NOPASSWD: /usr/bin/calamares, /usr/bin/zorix-storage-rescan
 EOF
 chmod 0440 rootfs/etc/sudoers.d/zorix-live-installer
 
@@ -112,7 +113,15 @@ for deb in rootfs/tmp/diffutils_*.deb rootfs/tmp/libc-bin_*.deb; do
 done
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get -y --fix-broken install'
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get -y dist-upgrade'
-sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get install -y --no-install-recommends calamares zenity lightdm lightdm-gtk-greeter systemd-sysv initramfs-tools grub-common grub2-common grub-efi-amd64-bin efibootmgr os-prober rsync dosfstools e2fsprogs btrfs-progs xfsprogs f2fs-tools network-manager xserver-xorg-input-libinput xserver-xorg-video-fbdev xserver-xorg-video-vesa xterm sudo earlyoom zram-tools'
+sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get install -y --no-install-recommends calamares zenity lightdm lightdm-gtk-greeter systemd-sysv initramfs-tools grub-common grub2-common grub-efi-amd64-bin efibootmgr os-prober rsync dosfstools e2fsprogs btrfs-progs xfsprogs f2fs-tools network-manager network-manager-gnome bluez blueman pipewire pipewire-pulse wireplumber pavucontrol alsa-utils rfkill parted udisks2 xserver-xorg-input-libinput xserver-xorg-video-fbdev xserver-xorg-video-vesa xterm sudo earlyoom zram-tools'
+sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'for g in sudo netdev audio video bluetooth; do getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" zorix || true; done; passwd -d zorix >/dev/null 2>&1 || true'
+sudo mkdir -p rootfs/etc/lightdm/lightdm.conf.d
+sudo tee rootfs/etc/lightdm/lightdm.conf.d/20-zorix-live.conf >/dev/null <<'EOF'
+[Seat:*]
+autologin-user=zorix
+autologin-user-timeout=0
+user-session=zorix
+EOF
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" depmod 6.12.96+deb13-amd64 || true
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" update-initramfs -c -k 6.12.96+deb13-amd64 || true
 
@@ -188,8 +197,10 @@ if core.exists():
 PY
 
 sh -n rootfs/usr/bin/zorix-installer
+sh -n rootfs/usr/bin/zorix-storage-rescan
 sh -n rootfs/usr/bin/zorix-session-supervisor
 sh -n rootfs/usr/lib/zorix/live-boot.sh
+sh -n rootfs/usr/lib/zorix/glass-session.sh
 python3 -m py_compile rootfs/usr/lib/zorix/glass_server.py rootfs/usr/lib/zorix/boot_splash.py
 test -x rootfs/usr/bin/calamares
 test -x rootfs/usr/sbin/grub-install -o -x rootfs/usr/bin/grub-install
