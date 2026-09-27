@@ -96,18 +96,19 @@ sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get install 
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" depmod 6.12.96+deb13-amd64 || true
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" update-initramfs -c -k 6.12.96+deb13-amd64 || true
 
-cat >rootfs/etc/default/zramswap <<'EOF'
+sudo tee rootfs/etc/default/zramswap >/dev/null <<'EOF'
 ALGO=zstd
 PERCENT=35
 PRIORITY=100
 EOF
-cat >rootfs/etc/default/earlyoom <<'EOF'
+sudo tee rootfs/etc/default/earlyoom >/dev/null <<'EOF'
 EARLYOOM_ARGS="-m 6,3 -s 6,3 -r 3600 --avoid '(^|/)(init|systemd|Xorg|Xvfb|lightdm)$' --prefer '(^|/)(chromium|chrome_crashpad)$'"
 EOF
 
 rm -f rootfs/usr/sbin/policy-rc.d
 cleanup_mounts
 trap - EXIT
+sudo chown -R "$(id -u):$(id -g)" rootfs
 
 python3 - <<'PY'
 from pathlib import Path
