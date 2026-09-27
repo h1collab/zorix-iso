@@ -1,0 +1,69 @@
+name: Build Zorix 1.3.0 Candidate
+
+on:
+  push:
+    paths:
+      - '.github/workflows/build-zorix-1.3.0-candidate.yml'
+      - 'release/1.3.0/**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-zorix-1.3.0-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified 1.2 seed
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-pip
+          python3 -m pip install --quiet --break-system-packages gdown
+          mkdir -p parts
+          gdown '1d4sT3FdpY6HW3y_wCpXPUGDD-YyexyB-' -O parts/ZorixOS-1.2-Glass.iso.part-00
+          gdown '1FRAwgoxisMfgUPifZ68A9LzIhh0eI9b_' -O parts/ZorixOS-1.2-Glass.iso.part-01
+          gdown '1FcPpT_ysasnNj0ty-2sA_L3a-RgcAzI3' -O parts/ZorixOS-1.2-Glass.iso.part-02
+          gdown '17KMmDEM4Uth7sq7575u4xDRSkjWgsp-3' -O parts/ZorixOS-1.2-Glass.iso.part-03
+          gdown '1BxeoIK9nVH8SHXYoonCKRFwzU7zvOhK9' -O parts/ZorixOS-1.2-Glass.iso.part-04
+          test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-00)" = 104857600
+          test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-01)" = 104857600
+          test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-02)" = 104857600
+          test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-03)" = 104857600
+          test "$(stat -c%s parts/ZorixOS-1.2-Glass.iso.part-04)" = 27262976
+          cat parts/ZorixOS-1.2-Glass.iso.part-* > ZorixOS-1.2-Glass.iso
+          echo '00dc624c1b817cd1e08c1de074cbb0ae8daf73213bb388f176757950ef07550b  ZorixOS-1.2-Glass.iso' | sha256sum -c -
+
+      - name: Build 1.3.0 candidate
+        shell: bash
+        env:
+          ZORIX_BASE_ISO: ZorixOS-1.2-Glass.iso
+          ZORIX_BASE_SHA256: 00dc624c1b817cd1e08c1de074cbb0ae8daf73213bb388f176757950ef07550b
+        run: bash release/1.3.0/tools/build-candidate.sh
+
+      - name: Candidate metadata
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sha256sum ZorixOS-1.3.0-Glass-Installer.iso
+          stat -c 'bytes=%s' ZorixOS-1.3.0-Glass-Installer.iso
+          test -s ZorixOS-1.3.0-Glass-Installer.iso.sha256
+
+      - name: Upload candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: zorix-1.3.0-candidate-${{ github.sha }}
+          path: |
+            ZorixOS-1.3.0-Glass-Installer.iso
+            ZorixOS-1.3.0-Glass-Installer.iso.sha256
+            build-docs
+          retention-days: 7
+          if-no-files-found: error
