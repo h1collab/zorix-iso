@@ -3,12 +3,18 @@ set -euo pipefail
 sudo apt-get update
 sudo apt-get install -y mtools p7zip-full zstd cpio clang lld gcc libx11-dev
 
-curl -fL --retry 5 -o ZorixOS-1.2.1-Glass.iso \
-  https://github.com/h1collab/zorix-iso/releases/download/v1.2.1/ZorixOS-1.2.1-Glass.iso
-echo '343f8e11fb162dd260a352aafeef4d656385b3634b0e463f44300da50dbad0d9  ZorixOS-1.2.1-Glass.iso' | sha256sum -c -
+BASE_ISO=ZorixOS-1.2.2-base.iso
+if gh release view v1.2.2 >/dev/null 2>&1; then
+  gh release download v1.2.2 -p 'ZorixOS-1.2.2-Glass.iso' -O "$BASE_ISO"
+  echo '7d4e26698fd689ff247c3a7f95512433508ab7bcd0949df730bdef0031234237  ZorixOS-1.2.2-base.iso' | sha256sum -c -
+else
+  curl -fL --retry 5 -o "$BASE_ISO" \
+    https://github.com/h1collab/zorix-iso/releases/download/v1.2.1/ZorixOS-1.2.1-Glass.iso
+  echo '343f8e11fb162dd260a352aafeef4d656385b3634b0e463f44300da50dbad0d9  ZorixOS-1.2.2-base.iso' | sha256sum -c -
+fi
 
 mkdir -p work rootfs build-docs scratch
-7z e -y ZorixOS-1.2.1-Glass.iso EFI.IMG -owork >/dev/null
+7z e -y "$BASE_ISO" EFI.IMG -owork >/dev/null
 mcopy -i work/EFI.IMG ::ZORIX/LIVE.CPI work/LIVE.CPI
 mcopy -i work/EFI.IMG ::ZORIX/LINUX.EFI work/LINUX.EFI 
 sudo bash -c 'cd rootfs && zstd -dc ../work/LIVE.CPI | cpio -idm --no-absolute-filenames'
@@ -77,3 +83,16 @@ else
   gh release create v1.2.2 ZorixOS-1.2.2-Glass.iso ZorixOS-1.2.2-Glass.iso.sha256 \
     --title 'Zorix OS 1.2.2 Glass Live' --notes-file release/1.2.2/README.md
 fi
+
+
+# Keep only the newest downloadable ISO to avoid users choosing stale builds.
+latest_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+while IFS=$'\t' read -r tag asset; do
+  [ -n "$tag" ] || continue
+  [ "$tag" = "$latest_tag" ] && continue
+  echo "Deleting stale release asset: $tag / $asset"
+  gh release delete-asset "$tag" "$asset" --yes
+done < <(
+  gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+    --jq '.[] | .tag_name as $tag | .assets[] | select(.name | test("\\.iso(\\.sha256)?$")) | [$tag, .name] | @tsv'
+)
