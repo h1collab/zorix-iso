@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 sudo apt-get update
-sudo apt-get install -y mtools p7zip-full ztd cpio clang lld gcc libx11-dev
+sudo apt-get install -y mtools p7zip-full zstd cpio clang lld gcc libx11-dev
 
 curl -fL --retry 5 -o ZorixOS-1.2.1-Glass.iso \
   https://github.com/h1collab/zorix-iso/releases/download/v1.2.1/ZorixOS-1.2.1-Glass.iso
