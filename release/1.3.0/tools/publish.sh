@@ -87,6 +87,8 @@ sudo mount -t proc proc rootfs/proc
 sudo mount --rbind /sys rootfs/sys
 
 sudo chroot rootfs /bin/sh -c 'apt-get update'
+sudo chroot rootfs /bin/sh -c 'apt-get -y --fix-broken install'
+sudo chroot rootfs /bin/sh -c 'apt-get -y dist-upgrade'
 sudo chroot rootfs /bin/sh -c 'apt-get install -y --no-install-recommends calamares zenity lightdm lightdm-gtk-greeter systemd-sysv initramfs-tools grub-common grub2-common grub-efi-amd64-bin efibootmgr os-prober rsync dosfstools e2fsprogs btrfs-progs xfsprogs f2fs-tools network-manager xserver-xorg-input-libinput xserver-xorg-video-fbdev xserver-xorg-video-vesa xterm sudo'
 sudo chroot rootfs depmod 6.12.96+deb13-amd64 || true
 sudo chroot rootfs update-initramfs -c -k 6.12.96+deb13-amd64 || true
