@@ -1,0 +1,1 @@
+Snapshot source: QEMU-smoke-tested v1.3.0 ISO before release-asset loss.
