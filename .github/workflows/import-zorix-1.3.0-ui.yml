@@ -1,0 +1,50 @@
+name: Import Zorix 1.3.0 UI Snapshot
+
+on:
+  push:
+    paths:
+      - '.github/workflows/import-zorix-1.3.0-ui.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Download last verified 1.3 UI snapshot
+        uses: actions/download-artifact@v4
+        with:
+          name: zorix-1.3.0-glass-source-snapshot
+          path: /tmp/zorix-ui
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 36303890563
+      - name: Import source snapshot
+        run: |
+          set -euxo pipefail
+          mkdir -p release/1.3.0/ui/assets release/1.3.0/runtime
+          cp /tmp/zorix-ui/glass/index.html release/1.3.0/ui/index.html
+          cp /tmp/zorix-ui/glass/app.js release/1.3.0/ui/app.js
+          cp /tmp/zorix-ui/glass/style.css release/1.3.0/ui/style.css
+          cp /tmp/zorix-ui/glass/assets/zorix-logo.svg release/1.3.0/ui/assets/zorix-logo.svg
+          cp /tmp/zorix-ui/glass/assets/zorix-tide.svg release/1.3.0/ui/assets/zorix-tide.svg
+          cp /tmp/zorix-ui/runtime/glass_server.py release/1.3.0/runtime/glass_server.py
+          cp /tmp/zorix-ui/runtime/glass-session.sh release/1.3.0/runtime/glass-session.sh
+          cp /tmp/zorix-ui/runtime/live-boot.sh release/1.3.0/runtime/live-boot.sh
+          printf '%s\n' 'Snapshot source: QEMU-smoke-tested v1.3.0 ISO before release-asset loss.' > release/1.3.0/ui/SNAPSHOT.txt
+      - name: Commit imported source
+        run: |
+          set -euxo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add release/1.3.0/ui release/1.3.0/runtime
+          git diff --cached --quiet && exit 0
+          git commit -m 'source: import last verified 1.3 Glass runtime snapshot'
+          git push
