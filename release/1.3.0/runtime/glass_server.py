@@ -24,6 +24,9 @@ APPS = {
  'monitor': ['/usr/bin/zorix-monitor'],
  'software': ['/usr/bin/zorix-software'],
  'media': ['/usr/bin/zorix-media'],
+ 'network': ['/usr/bin/nm-connection-editor'],
+ 'bluetooth': ['/usr/bin/blueman-manager'],
+ 'audio': ['/usr/bin/pavucontrol'],
 }
 DEFAULT = {'theme':'aurora', 'reducedMotion':False, 'reducedTransparency':False, 'contrast':False, 'language':'en', 'welcomeDone':False, 'glassIntensity':64, 'wallpaperMotion':False, 'largeText':False}
 
@@ -34,7 +37,7 @@ class State:
   self.config=self.home/'.config/zorix'; self.config.mkdir(parents=True,exist_ok=True,mode=0o700)
   self.notes=self.home/'Documents/Zorix Notes.txt'; self.notes.parent.mkdir(parents=True,exist_ok=True)
   self.tasks=self.config/'tasks.json'
-  self.audit=self.config/'actions.jsonl'; self.events=[]
+  self.audit=self.config/'actions.jsonl'; self.events=[]; self.desktop_map={}
  def settings(self):
   result=DEFAULT.copy()
   try:
@@ -66,7 +69,7 @@ class State:
    p=subprocess.run([str(self.core)],capture_output=True,text=True,timeout=4,check=True)
    result=json.loads(p.stdout)
   except (OSError,ValueError,subprocess.SubprocessError) as e:
-   result={'system':'Zorix OS','version':'1.2.1','runtime':'Swift component unavailable','error':str(e)[:160]}
+   result={'system':'Zorix OS','version':'1.3.0','runtime':'Swift component unavailable','error':str(e)[:160]}
   result['capabilities']={k:os.access(v[0],os.X_OK) for k,v in APPS.items()}
   result['networkInterfaces']=[p.name for p in pathlib.Path('/sys/class/net').glob('*') if p.name!='lo']
   result['storagePersistence']='volatile' if pathlib.Path('/etc/zorix-live').exists() else 'host-user-folder'
@@ -90,6 +93,87 @@ class State:
    st=os.statvfs(self.home); result['homeStorage']={'totalBytes':st.f_blocks*st.f_frsize,'freeBytes':st.f_bavail*st.f_frsize}
   except OSError: result['homeStorage']={}
   return result
+ def desktop_apps(self):
+  result=[]; mapping={}
+  for base in (pathlib.Path('/usr/share/applications'),self.home/'.local/share/applications'):
+   if not base.is_dir(): continue
+   for p in sorted(base.glob('*.desktop')):
+    try:
+     fields={}; active=False
+     for raw in p.read_text(errors='replace').splitlines():
+      line=raw.strip()
+      if line.startswith('[') and line.endswith(']'):
+       active=line=='[Desktop Entry]'; continue
+      if not active or not line or line.startswith('#') or '=' not in line: continue
+      k,v=line.split('=',1)
+      if k in ('Name','Comment','Type','Hidden','NoDisplay'): fields.setdefault(k,v.strip())
+     if fields.get('Type','Application')!='Application' or fields.get('Hidden','false').lower()=='true' or fields.get('NoDisplay','false').lower()=='true': continue
+     name=fields.get('Name') or p.stem
+     ident='desktop:'+hashlib.sha256(str(p).encode()).hexdigest()[:16]
+     mapping[ident]=p
+     result.append({'id':ident,'name':name[:80],'comment':fields.get('Comment','Installed application')[:120]})
+    except OSError: continue
+  self.desktop_map=mapping
+  return sorted(result,key=lambda x:x['name'].casefold())[:160]
+ def connectivity(self):
+  route_iface=''
+  try:
+   for line in pathlib.Path('/proc/net/route').read_text(errors='replace').splitlines()[1:]:
+    cols=line.split()
+    if len(cols)>3 and cols[1]=='00000000' and (int(cols[3],16)&2):
+     route_iface=cols[0]; break
+  except (OSError,ValueError): pass
+  devices=[]; wifi_present=False
+  for p in sorted(pathlib.Path('/sys/class/net').glob('*')):
+   if p.name=='lo': continue
+   try: state=(p/'operstate').read_text().strip()
+   except OSError: state='unknown'
+   wireless=(p/'wireless').exists(); wifi_present=wifi_present or wireless
+   devices.append({'name':p.name,'state':state,'wireless':wireless})
+  network={'connected':bool(route_iface),'defaultRoute':bool(route_iface),'interface':route_iface,'connection':'','ssid':'','wifiPresent':wifi_present,'wifiEnabled':None,'devices':devices}
+  if shutil.which('nmcli'):
+   try:
+    p=subprocess.run(['nmcli','-t','--escape','no','-f','DEVICE,TYPE,STATE,CONNECTION','device','status'],capture_output=True,text=True,timeout=2)
+    for line in p.stdout.splitlines():
+     parts=line.split(':',3)
+     if len(parts)<4: continue
+     dev,typ,state,conn=parts
+     if state.startswith('connected'):
+      network['connected']=True
+      if not network['interface']: network['interface']=dev
+      if not network['connection']: network['connection']=conn
+      if typ=='wifi': network['ssid']=conn
+    q=subprocess.run(['nmcli','-t','-f','WIFI','general'],capture_output=True,text=True,timeout=2)
+    if q.returncode==0: network['wifiEnabled']=q.stdout.strip().lower()=='enabled'
+   except (OSError,subprocess.SubprocessError): pass
+  bt={'present':False,'powered':False,'adapter':''}
+  adapters=sorted(pathlib.Path('/sys/class/bluetooth').glob('hci*'))
+  if adapters: bt={'present':True,'powered':False,'adapter':adapters[0].name}
+  if shutil.which('bluetoothctl'):
+   try:
+    p=subprocess.run(['bluetoothctl','show'],capture_output=True,text=True,timeout=2)
+    for line in p.stdout.splitlines():
+     q=line.strip()
+     if q.startswith('Controller '):
+      bt['present']=True; parts=q.split(); bt['adapter']=parts[1] if len(parts)>1 else bt['adapter']
+     elif q.startswith('Powered:'): bt['powered']=q.split(':',1)[1].strip().lower()=='yes'
+   except (OSError,subprocess.SubprocessError): pass
+  audio={'available':False,'server':''}
+  if shutil.which('pactl'):
+   try:
+    p=subprocess.run(['pactl','info'],capture_output=True,text=True,timeout=2)
+    if p.returncode==0:
+     audio['available']=True
+     for line in p.stdout.splitlines():
+      if line.startswith('Server Name:'): audio['server']=line.split(':',1)[1].strip()[:100]
+   except (OSError,subprocess.SubprocessError): pass
+  battery={'present':False,'name':'','capacity':0,'status':''}
+  for bat in pathlib.Path('/sys/class/power_supply').glob('*'):
+   try:
+    if (bat/'type').read_text().strip()!='Battery': continue
+    battery={'present':True,'name':bat.name,'capacity':int((bat/'capacity').read_text().strip()),'status':(bat/'status').read_text().strip()}; break
+   except (OSError,ValueError): continue
+  return {'network':network,'bluetooth':bt,'audio':audio,'battery':battery}
  def task_list(self):
   try:
    data=json.loads(self.tasks.read_text())
@@ -131,7 +215,7 @@ class State:
   return {'gpus':gpu,'batteries':battery,'temperatures':temps}
 
 class Handler(BaseHTTPRequestHandler):
- server_version='ZorixGlass/1.2.1'
+ server_version='ZorixGlass/1.3.0'
  def log_message(self,*args):pass
  @property
  def s(self):return self.server.state
@@ -160,6 +244,8 @@ class Handler(BaseHTTPRequestHandler):
    if path.startswith('/api/'):
     if not self.auth():return self.send(403,{'error':'Session authorization required'})
     if path=='/api/system':return self.send(200,self.s.system())
+    if path=='/api/connectivity':return self.send(200,self.s.connectivity())
+    if path=='/api/apps':return self.send(200,{'apps':self.s.desktop_apps()})
     if path=='/api/settings':return self.send(200,self.s.settings())
     if path=='/api/notes':
      self.s.safe_path(str(self.s.notes))
@@ -237,13 +323,19 @@ class Handler(BaseHTTPRequestHandler):
      (parent/name).mkdir(mode=0o700);self.s.record('folder-created');return self.send(200,{'created':True})
     if path=='/api/launch':
      key=data.get('app')
-     if key not in APPS:raise ValueError('Application is not allowlisted')
-     argv=[p.replace('{home}',str(self.s.home)) for p in APPS[key]]
+     if key in APPS:
+      argv=[p.replace('{home}',str(self.s.home)) for p in APPS[key]]; logkey=key
+     elif isinstance(key,str) and key.startswith('desktop:'):
+      self.s.desktop_apps(); desktop=self.s.desktop_map.get(key)
+      if desktop is None:raise ValueError('Installed application is no longer available')
+      if not shutil.which('gio'):return self.send(409,{'error':'Desktop launcher runtime is unavailable'})
+      argv=['/usr/bin/gio','launch',str(desktop)]; logkey='desktop'
+     else:raise ValueError('Application is not allowlisted')
      if self.s.testing:return self.send(200,{'testMode':True,'argv':argv})
      if not os.access(argv[0],os.X_OK):return self.send(409,{'error':'Application runtime not installed'})
-     logfile=self.s.config/f'{key}.log'
+     logfile=self.s.config/f'{logkey}.log'
      with open(logfile,'ab') as log:subprocess.Popen(argv,stdin=subprocess.DEVNULL,stdout=log,stderr=log,start_new_session=True)
-     self.s.record('launched-'+key);return self.send(200,{'launched':key})
+     self.s.record('launched-'+logkey);return self.send(200,{'launched':key})
     if path=='/api/power':
      action=data.get('action')
      if action not in ('poweroff','reboot') or data.get('confirmation')!=action:raise ValueError('Explicit confirmation required')
@@ -261,13 +353,13 @@ def main():
  p=argparse.ArgumentParser();p.add_argument('--ui',type=pathlib.Path,default=pathlib.Path('/usr/share/zorix/glass'));p.add_argument('--core',type=pathlib.Path,default=pathlib.Path('/usr/bin/zorix-core'));p.add_argument('--port',type=int,default=0);p.add_argument('--no-browser',action='store_true');p.add_argument('--test-mode',action='store_true');p.add_argument('--session-file',type=pathlib.Path);a=p.parse_args()
  if os.getuid()==0 and not a.test_mode:sys.exit('Start the Zorix desktop as an ordinary user, not root.')
  state=State(pathlib.Path.home(),a.ui,a.core,a.test_mode);server=make_server(state,a.port)
- url=f'http://127.0.0.1:{server.server_port}/#token={state.token}'
+ render=urllib.parse.quote(os.environ.get('ZORIX_RENDER_MODE','portable')); url=f'http://127.0.0.1:{server.server_port}/#token={state.token}&render={render}'
  if a.session_file:state.save(a.session_file,json.dumps({'url':url,'pid':os.getpid(),'port':server.server_port}))
  threading.Thread(target=server.serve_forever,daemon=True).start()
  child=None
  try:
   if not a.no_browser:
-   argv=['/usr/bin/chromium','--app='+url,'--class=ZorixGlass','--user-data-dir='+str(state.config/'glass-browser'),'--no-first-run','--disable-sync','--disable-extensions','--disable-background-networking','--disable-component-update','--ozone-platform=x11','--disable-dev-shm-usage','--no-default-browser-check','--password-store=basic','--start-maximized']
+   argv=['/usr/bin/chromium','--app='+url,'--class=ZorixGlass','--user-data-dir='+str(state.config/'glass-browser'),'--no-first-run','--disable-sync','--disable-extensions','--disable-background-networking','--disable-component-update','--ozone-platform=x11','--disable-dev-shm-usage','--no-default-browser-check','--password-store=basic','--start-maximized','--renderer-process-limit=2','--disk-cache-size=67108864','--media-cache-size=33554432']
    # Native Xorg can use Chromium's normal GPU auto-detection. Portable Xvfb
    # has no real GPU, so keep software rendering there to avoid probe stalls.
    if os.environ.get('ZORIX_RENDER_MODE')=='portable':
