@@ -37,7 +37,14 @@ jobs:
       - name: Validate shell sources
         run: |
           sh -n release/1.3.0/src/zorix-installer
+          sh -n release/1.3.0/src/zorix-storage-rescan
           sh -n release/1.3.0/src/zorix-session-supervisor.sh
+          sh -n release/1.3.0/runtime/live-boot.sh
+          sh -n release/1.3.0/runtime/glass-session.sh
+          python3 -m py_compile release/1.3.0/runtime/glass_server.py
+          node --check release/1.3.0/ui/app.js
+          grep -Fq 'ahci ata_piix nvme' release/1.3.0/runtime/live-boot.sh
+          grep -Fq -- '--autostart' release/1.3.0/runtime/glass-session.sh
       - name: Validate Glass performance override
         run: |
           grep -Fq 'html[data-render="portable"] .liquid-glass' release/1.3.0/src/glass-1.3.css
