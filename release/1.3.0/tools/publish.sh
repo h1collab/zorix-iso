@@ -4,7 +4,7 @@ export DEBIAN_FRONTEND=noninteractive
 CHROOT_PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 sudo apt-get update -qq
-sudo apt-get install -y -qq mtools p7zip-full zstd cpio gcc curl python3-yaml
+sudo apt-get install -y -qq mtools p7zip-full zstd cpio gcc curl python3-yaml libx11-dev
 
 python3 release/1.3.0/tools/validate_installer_config.py
 
@@ -41,6 +41,8 @@ mkdir -p rootfs/boot rootfs/etc/calamares/modules rootfs/etc/calamares/branding/
 cp work/LINUX.EFI rootfs/boot/vmlinuz-6.12.96+deb13-amd64
 install -m 0755 release/1.3.0/src/zorix-installer rootfs/usr/bin/zorix-installer
 install -m 0755 release/1.3.0/src/zorix-session-supervisor.sh rootfs/usr/bin/zorix-session-supervisor
+gcc -O2 -Wall -Wextra release/1.3.0/src/framebuffer_bridge.c -lX11 -o rootfs/usr/bin/zorix-framebuffer
+cat release/1.3.0/src/glass-1.3.css >> rootfs/usr/share/zorix/glass/style.css
 install -m 0644 release/1.3.0/calamares/settings.conf rootfs/etc/calamares/settings.conf
 cp -a release/1.3.0/calamares/modules/. rootfs/etc/calamares/modules/
 cp -a release/1.3.0/calamares/branding/zorix/. rootfs/etc/calamares/branding/zorix/
@@ -141,6 +143,10 @@ if p.exists():
 g=root/'usr/lib/zorix/glass_server.py'
 if g.exists():
     text=g.read_text(errors='replace')
+    text=text.replace("url=f'http://127.0.0.1:{server.server_port}/#token={state.token}'",
+                      "render=urllib.parse.quote(os.environ.get('ZORIX_RENDER_MODE','portable')); url=f'http://127.0.0.1:{server.server_port}/#token={state.token}&render={render}'")
+    text=text.replace("'--password-store=basic','--start-maximized']",
+                      "'--password-store=basic','--start-maximized','--renderer-process-limit=2','--disk-cache-size=67108864','--media-cache-size=33554432']" )
     needle="'--renderer-process-limit=2']"
     replacement="'--renderer-process-limit=2','--disk-cache-size=67108864','--media-cache-size=33554432','--disable-breakpad','--disable-component-update','--disable-sync']"
     if needle in text and '--disk-cache-size=67108864' not in text:
@@ -151,7 +157,14 @@ if g.exists():
 for p in [root/'usr/share/zorix/glass/index.html', root/'usr/share/zorix/glass/app.js',
           root/'usr/share/doc/zorix-os/source/glass_server.py']:
     if p.exists():
-        p.write_text(p.read_text(errors='replace').replace('1.2.2','1.3.0'))
+        text=p.read_text(errors='replace').replace('1.2.2','1.3.0')
+        if p.name == 'index.html':
+            text=text.replace('<title>Zorix Glass 1.2</title>','<title>Zorix Glass 1.3</title>')
+        if p.name == 'app.js' and "dataset.render" not in text:
+            marker="const token=new URLSearchParams(location.hash.slice(1)).get('token')||sessionStorage.getItem('zorix-token')||'';"
+            replacement=marker+"\\nconst renderMode=new URLSearchParams(location.hash.slice(1)).get('render')||'native';document.documentElement.dataset.render=renderMode;"
+            text=text.replace(marker,replacement)
+        p.write_text(text)
 
 core=root/'usr/bin/zorix-core'
 if core.exists():
