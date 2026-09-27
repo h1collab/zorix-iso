@@ -19,9 +19,10 @@
 #include <errno.h>
 static volatile sig_atomic_t stop;
 static void stopped(int s){(void)s;stop=1;}
-static void mark_ready(const char *path){ if(!path||!*path)return; int rfd=open(path,O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC,0644); if(rfd>=0){(void)write(rfd,"ready\n",6);close(rfd);} }
+static void mark_ready(const char *path){ if(!path||!*path)return; int rfd=open(path,O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC,0644); if(rfd>=0){ssize_t wr=write(rfd,"ready\n",6);(void)wr;close(rfd);} }
 int main(int argc,char**argv){
- const char *ready_file=NULL; int size_only=0,fps=20;\n for(int i=1;i<argc;i++){ if(!strcmp(argv[i],"--size"))size_only=1; else if(!strcmp(argv[i],"--ready-file")&&i+1<argc)ready_file=argv[++i]; else if(!strcmp(argv[i],"--fps")&&i+1<argc){fps=atoi(argv[++i]);if(fps<10||fps>30){fputs("fps must be between 10 and 30\\n",stderr);return 64;}} else {fprintf(stderr,"usage: %s [--size] [--ready-file PATH] [--fps 10..30]\\n",argv[0]);return 64;} }
+ const char *ready_file=NULL; int size_only=0,fps=20;
+ for(int i=1;i<argc;i++){ if(!strcmp(argv[i],"--size"))size_only=1; else if(!strcmp(argv[i],"--ready-file")&&i+1<argc)ready_file=argv[++i]; else if(!strcmp(argv[i],"--fps")&&i+1<argc){fps=atoi(argv[++i]);if(fps<10||fps>30){fputs("fps must be between 10 and 30\n",stderr);return 64;}} else {fprintf(stderr,"usage: %s [--size] [--ready-file PATH] [--fps 10..30]\n",argv[0]);return 64;} }
  int fd=open("/dev/fb0",O_RDWR|O_CLOEXEC);if(fd<0){perror("/dev/fb0");return 1;}
  struct fb_fix_screeninfo fix;struct fb_var_screeninfo var;
  if(ioctl(fd,FBIOGET_FSCREENINFO,&fix)||ioctl(fd,FBIOGET_VSCREENINFO,&var)){perror("framebuffer info");return 2;}
