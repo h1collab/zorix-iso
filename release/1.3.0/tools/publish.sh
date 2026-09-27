@@ -108,9 +108,7 @@ EOF
 sudo rm -f rootfs/usr/sbin/policy-rc.d
 cleanup_mounts
 trap - EXIT
-sudo chown -R "$(id -u):$(id -g)" rootfs
-
-python3 - <<'PY'
+sudo python3 - <<'PY'
 from pathlib import Path
 root=Path('rootfs')
 p=root/'usr/lib/zorix/live-boot.sh'
@@ -167,7 +165,7 @@ test -f rootfs/boot/vmlinuz-6.12.96+deb13-amd64
 test -f rootfs/etc/calamares/settings.conf
 test -f rootfs/usr/share/xsessions/zorix.desktop
 
-python3 release/1.2.1/tools/build_iso.py \
+sudo python3 release/1.2.1/tools/build_iso.py \
   --root rootfs \
   --kernel work/LINUX.EFI \
   --loader work/BOOTX64.EFI \
