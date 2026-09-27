@@ -15,6 +15,7 @@ mkdir -p work rootfs build-docs scratch
 7z e -y "$BASE" EFI.IMG -owork >/dev/null
 mcopy -i work/EFI.IMG ::ZORIX/LIVE.CPI work/LIVE.CPI
 mcopy -i work/EFI.IMG ::ZORIX/LINUX.EFI work/LINUX.EFI
+mcopy -i work/EFI.IMG ::EFI/BOOT/BOOTX64.EFI work/BOOTX64.EFI
 sudo bash -c 'cd rootfs && zstd -dc ../work/LIVE.CPI | cpio -idm --no-absolute-filenames >/dev/null 2>&1'
 sudo chown -R "$(id -u):$(id -g)" rootfs
 
