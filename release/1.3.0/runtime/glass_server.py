@@ -421,7 +421,8 @@ def main():
  child=None
  try:
   if not a.no_browser:
-   argv=['/usr/bin/chromium','--app='+url,'--class=ZorixGlass','--user-data-dir='+str(state.config/'glass-browser'),'--no-first-run','--disable-sync','--disable-extensions','--disable-background-networking','--disable-component-update','--ozone-platform=x11','--disable-dev-shm-usage','--no-default-browser-check','--password-store=basic','--start-maximized','--renderer-process-limit=2','--disk-cache-size=67108864','--media-cache-size=33554432']
+   chromium='/usr/lib/chromium/chromium' if os.access('/usr/lib/chromium/chromium',os.X_OK) else '/usr/bin/chromium'
+   argv=[chromium,'--app='+url,'--class=ZorixGlass','--user-data-dir='+str(state.config/'glass-browser'),'--no-first-run','--disable-sync','--disable-extensions','--disable-background-networking','--disable-component-update','--ozone-platform=x11','--disable-dev-shm-usage','--no-default-browser-check','--password-store=basic','--start-maximized','--renderer-process-limit=2','--disk-cache-size=67108864','--media-cache-size=33554432']
    # Native Xorg can use Chromium's normal GPU auto-detection. Portable Xvfb
    # has no real GPU, so keep software rendering there to avoid probe stalls.
    if os.environ.get('ZORIX_RENDER_MODE')=='portable':
@@ -437,7 +438,7 @@ def main():
     ]
    else:
     argv += ['--enable-gpu-rasterization']
-   print('ZORIX_BROWSER_START:'+os.environ.get('ZORIX_RENDER_MODE','unknown'),flush=True); serial('ZORIX_BROWSER_START:'+os.environ.get('ZORIX_RENDER_MODE','unknown'))
+   print('ZORIX_BROWSER_START:'+os.environ.get('ZORIX_RENDER_MODE','unknown')+':'+chromium,flush=True); serial('ZORIX_BROWSER_START:'+os.environ.get('ZORIX_RENDER_MODE','unknown')+':'+chromium)
    child=subprocess.Popen(argv)
    browser_rc=child.wait()
    print('ZORIX_BROWSER_EXIT:'+str(browser_rc),flush=True); serial('ZORIX_BROWSER_EXIT:'+str(browser_rc))
