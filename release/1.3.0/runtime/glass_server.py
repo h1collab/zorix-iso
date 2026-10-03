@@ -337,6 +337,13 @@ class Handler(BaseHTTPRequestHandler):
      print('ZORIX_GLASS_READY:'+render,flush=True); serial('ZORIX_GLASS_READY:'+render)
      self.s.record('glass-ready')
      return self.send(200,{'ready':True})
+    if path=='/api/heartbeat':
+     beat=int(data.get('beat',0))
+     render=str(data.get('render','unknown'))[:32]
+     if beat>0:
+      line='ZORIX_GLASS_HEARTBEAT:'+render+':'+str(beat)
+      print(line,flush=True); serial(line)
+     return self.send(200,{'alive':True})
     if path=='/api/settings':
      settings=self.s.settings()
      for k,v in data.items():
