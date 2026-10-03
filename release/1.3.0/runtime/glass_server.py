@@ -273,7 +273,9 @@ class Handler(BaseHTTPRequestHandler):
     font=pathlib.Path(os.environ.get('ZORIX_TEST_FONT','/run/zorix-fonts/ZorixSans.ttf'))
     return self.send(200,font.read_bytes(),'font/ttf')
    if path.startswith('/api/'):
-    if not self.auth():return self.send(403,{'error':'Session authorization required'})
+    if not self.auth():
+     serial('ZORIX_AUTH_FAIL:GET:'+path+':token=' + ('yes' if bool(self.headers.get('X-Zorix-Token')) else 'no'))
+     return self.send(403,{'error':'Session authorization required'})
     if path=='/api/system':return self.send(200,self.s.system())
     if path=='/api/connectivity':return self.send(200,self.s.connectivity())
     if path=='/api/apps':return self.send(200,{'apps':self.s.desktop_apps()})
@@ -313,7 +315,10 @@ class Handler(BaseHTTPRequestHandler):
    return self.send(200,p.read_bytes(),mimetypes.guess_type(p)[0] or 'application/octet-stream')
   except (OSError,ValueError) as e:return self.send(400,{'error':str(e)[:200]})
  def do_POST(self):
-  if not self.auth():return self.send(403,{'error':'Session authorization required'})
+  if not self.auth():
+   path=urllib.parse.urlsplit(self.path).path
+   serial('ZORIX_AUTH_FAIL:POST:'+path+':token=' + ('yes' if bool(self.headers.get('X-Zorix-Token')) else 'no'))
+   return self.send(403,{'error':'Session authorization required'})
   try:
    length=int(self.headers.get('Content-Length','0'))
    if not 0<length<=256000:return self.send(413,{'error':'Request too large or empty'})
