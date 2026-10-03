@@ -3,6 +3,9 @@
   'use strict';
   var params=new URLSearchParams(location.hash.slice(1));
   var token=params.get('token')||'';
+  var renderMode=params.get('render')||'native';
+  document.documentElement.setAttribute('data-render',renderMode);
+  if(renderMode==='portable') document.documentElement.setAttribute('data-low-cost','true');
   function post(path,data){
     try{
       var x=new XMLHttpRequest();
