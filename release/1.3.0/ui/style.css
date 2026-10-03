@@ -100,3 +100,26 @@ html[data-render="portable"] .window.dragging{box-shadow:0 18px 42px rgba(0,0,0,
 .home-action .appicon{width:50px;height:50px}
 .desktop-glyph{width:64px;height:64px}
 @media(max-width:900px){.dock button{width:53px;height:53px}.dock .appicon{width:49px;height:49px}}
+
+
+/* Portable bootstrap safety: active before app.js initializes. */
+html[data-low-cost="true"] .aurora,
+html[data-low-cost="true"] .liquid-ribbon,
+html[data-low-cost="true"] .caustics,
+html[data-low-cost="true"] .grain,
+html[data-low-cost="true"] #pointer-lens{
+  display:none!important;
+  animation:none!important;
+  filter:none!important;
+  transform:none!important;
+}
+html[data-low-cost="true"] body,
+html[data-low-cost="true"] .workspace{
+  animation:none!important;
+}
+html[data-low-cost="true"] .liquid-glass,
+html[data-low-cost="true"] .menubar,
+html[data-low-cost="true"] .dock{
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
