@@ -12,6 +12,7 @@ sleep .10
 compid=
 audio_pids=
 installerpid=
+udiskiepid=
 if [ "${ZORIX_RENDER_MODE:-portable}" != portable ]; then
   picom --config /usr/share/zorix/picom.conf --daemon >"$HOME/.config/zorix/picom.log" 2>&1 || true
   compid=$(pgrep -n picom 2>/dev/null || true)
@@ -22,8 +23,13 @@ for cmd in pipewire pipewire-pulse wireplumber; do
     audio_pids="$audio_pids $!"
   fi
 done
+if command -v udiskie >/dev/null 2>&1; then
+  udiskie --automount >>"$HOME/.config/zorix/udiskie.log" 2>&1 &
+  udiskiepid=$!
+fi
 cleanup(){
   [ -n "$installerpid" ] && kill "$installerpid" 2>/dev/null || true
+  [ -n "$udiskiepid" ] && kill "$udiskiepid" 2>/dev/null || true
   for pid in $audio_pids; do kill "$pid" 2>/dev/null || true; done
   [ -n "$compid" ] && kill "$compid" 2>/dev/null || true
   kill "$obpid" 2>/dev/null || true
