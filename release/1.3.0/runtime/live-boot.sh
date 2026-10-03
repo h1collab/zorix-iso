@@ -166,7 +166,7 @@ touch /home/zorix/.config/zorix/glass.log
 chown -R 1000:1000 /home/zorix/.config/zorix
 tail -n 0 -F /home/zorix/.config/zorix/glass.log >/dev/ttyS0 2>/dev/null &
 glasslogpid=$!
-env LANG=C.UTF-8 DISPLAY=:0 XAUTHORITY="$XAUTHORITY" XDG_RUNTIME_DIR=/run/user/1000 XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=Zorix XCURSOR_PATH=/usr/share/icons XCURSOR_THEME=ZorixGlass XCURSOR_SIZE=32 ZORIX_RENDER_MODE="$mode" /usr/bin/zorix-run-user dbus-run-session -- /usr/bin/zorix-session-supervisor
+env LANG=C.UTF-8 DISPLAY=:0 XAUTHORITY="$XAUTHORITY" XDG_RUNTIME_DIR=/run/user/1000 XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=Zorix XCURSOR_PATH=/usr/share/icons XCURSOR_THEME=ZorixGlass XCURSOR_SIZE=32 ZORIX_RENDER_MODE="$mode" ZORIX_SCREEN_SIZE="${size:-1024x768}" /usr/bin/zorix-run-user dbus-run-session -- /usr/bin/zorix-session-supervisor
 status=$?
 echo "Zorix Glass session exited with status $status"
 tail -n 80 /home/zorix/.config/zorix/glass.log 2>/dev/null || true
