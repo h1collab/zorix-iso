@@ -135,6 +135,12 @@ jobs:
             magick "captures/zorix-candidate-$n.ppm" "captures/zorix-candidate-$n.png" 2>/dev/null || \
               convert "captures/zorix-candidate-$n.ppm" "captures/zorix-candidate-$n.png"
             test -s "captures/zorix-candidate-$n.png"
+            colors="$(identify -format '%k' "captures/zorix-candidate-$n.png")"
+            echo "frame $n unique colors: $colors"
+            if [ "$colors" -lt 50 ]; then
+              echo "Framebuffer validation failed: frame $n is visually flat/blank." >&2
+              exit 1
+            fi
             sleep 4
           done
           cp qemu-serial.log captures/qemu-serial.log
