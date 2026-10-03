@@ -1,0 +1,114 @@
+name: Capture Zorix Candidate QEMU Screenshot
+
+on:
+  workflow_run:
+    workflows: ["Build Zorix 1.3.0 Candidate"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  capture:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install emulator tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 ovmf socat imagemagick parted
+
+      - name: Download candidate artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: zorix-1.3.0-candidate-*
+          path: candidate
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Verify candidate
+        working-directory: candidate
+        run: |
+          set -euxo pipefail
+          sha256sum -c ZorixOS-1.3.0-Glass-Installer.iso.sha256
+          stat -c 'ISO bytes: %s' ZorixOS-1.3.0-Glass-Installer.iso
+
+      - name: Boot candidate and capture real framebuffer
+        shell: bash
+        run: |
+          set -euo pipefail
+          ISO=candidate/ZorixOS-1.3.0-Glass-Installer.iso
+          if [ -f /usr/share/OVMF/OVMF_CODE_4M.fd ] && [ -f /usr/share/OVMF/OVMF_VARS_4M.fd ]; then
+            CODE=/usr/share/OVMF/OVMF_CODE_4M.fd
+            VARS=/usr/share/OVMF/OVMF_VARS_4M.fd
+          else
+            CODE=/usr/share/OVMF/OVMF_CODE.fd
+            VARS=/usr/share/OVMF/OVMF_VARS.fd
+          fi
+          cp "$VARS" OVMF_VARS.fd
+          truncate -s 16G zorix-test-disk.img
+          parted -s zorix-test-disk.img mklabel gpt
+          : > qemu-serial.log
+          rm -f /tmp/zorix-monitor.sock
+
+          qemu-system-x86_64 \
+            -machine q35,accel=tcg -cpu max -smp 2 -m 8192 \
+            -drive if=pflash,format=raw,readonly=on,file="$CODE" \
+            -drive if=pflash,format=raw,file=OVMF_VARS.fd \
+            -drive media=cdrom,format=raw,readonly=on,file="$ISO" \
+            -drive file=zorix-test-disk.img,format=raw,if=none,id=sata0 \
+            -device ide-hd,drive=sata0,bus=ide.1 \
+            -boot order=d,menu=off -vga std -display none \
+            -serial file:qemu-serial.log \
+            -monitor unix:/tmp/zorix-monitor.sock,server,nowait \
+            -no-reboot -no-shutdown &
+          pid=$!
+          cleanup(){ kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; }
+          trap cleanup EXIT
+
+          ready=0
+          for second in $(seq 1 280); do
+            if grep -Fq 'ZORIX_STAGE:Recovery console' qemu-serial.log; then
+              cat qemu-serial.log >&2
+              exit 1
+            fi
+            if grep -Fq 'ZORIX_GLASS_READY:portable' qemu-serial.log; then
+              ready=1
+              break
+            fi
+            if grep -Fq 'ZORIX_BROWSER_EXIT:' qemu-serial.log; then
+              cat qemu-serial.log >&2
+              exit 1
+            fi
+            kill -0 "$pid" 2>/dev/null || { cat qemu-serial.log >&2; exit 1; }
+            sleep 1
+          done
+          test "$ready" = 1
+          grep -Fq 'ZORIX_DISKS:1' qemu-serial.log
+          grep -Fq 'ZORIX_PARTED_DISKS:1' qemu-serial.log
+
+          mkdir -p captures
+          sleep 3
+          for n in 1 2 3; do
+            printf 'screendump captures/zorix-candidate-%s.ppm\n' "$n" | socat - UNIX-CONNECT:/tmp/zorix-monitor.sock
+            test -s "captures/zorix-candidate-$n.ppm"
+            magick "captures/zorix-candidate-$n.ppm" "captures/zorix-candidate-$n.png" 2>/dev/null || \
+              convert "captures/zorix-candidate-$n.ppm" "captures/zorix-candidate-$n.png"
+            test -s "captures/zorix-candidate-$n.png"
+            sleep 4
+          done
+          cp qemu-serial.log captures/qemu-serial.log
+
+      - name: Upload candidate screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: zorix-1.3.0-candidate-real-screenshots
+          path: captures
+          retention-days: 14
+          if-no-files-found: error
