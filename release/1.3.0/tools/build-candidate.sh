@@ -36,11 +36,12 @@ install -m 0755 release/1.3.0/runtime/glass-session.sh rootfs/usr/lib/zorix/glas
 install -m 0755 release/1.3.0/runtime/glass_server.py rootfs/usr/lib/zorix/glass_server.py
 install -m 0755 release/1.2.2/src/boot_splash.py rootfs/usr/lib/zorix/boot_splash.py
 
-mkdir -p rootfs/boot rootfs/etc/calamares/modules rootfs/etc/calamares/branding/zorix
+mkdir -p rootfs/boot rootfs/etc/calamares/modules rootfs/etc/calamares/branding/zorix rootfs/etc/X11/xorg.conf.d
 cp work/LINUX.EFI rootfs/boot/vmlinuz-6.12.96+deb13-amd64
 install -m 0755 release/1.3.0/src/zorix-installer rootfs/usr/bin/zorix-installer
 install -m 0755 release/1.3.0/src/zorix-storage-rescan rootfs/usr/bin/zorix-storage-rescan
 install -m 0755 release/1.3.0/src/zorix-session-supervisor.sh rootfs/usr/bin/zorix-session-supervisor
+install -m 0644 release/1.3.0/xorg/40-zorix-libinput.conf rootfs/etc/X11/xorg.conf.d/40-zorix-libinput.conf
 gcc -O2 -Wall -Wextra release/1.3.0/src/framebuffer_bridge.c -lX11 -o rootfs/usr/bin/zorix-framebuffer
 cat release/1.3.0/src/glass-1.3.css >> rootfs/usr/share/zorix/glass/style.css
 install -m 0644 release/1.3.0/calamares/settings.conf rootfs/etc/calamares/settings.conf
@@ -113,7 +114,7 @@ for deb in rootfs/tmp/diffutils_*.deb rootfs/tmp/libc-bin_*.deb; do
 done
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get -y --fix-broken install'
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get -y dist-upgrade'
-sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get install -y --no-install-recommends calamares zenity lightdm lightdm-gtk-greeter systemd-sysv initramfs-tools grub-common grub2-common grub-efi-amd64-bin efibootmgr os-prober rsync dosfstools e2fsprogs btrfs-progs xfsprogs f2fs-tools network-manager network-manager-gnome bluez blueman pipewire pipewire-pulse wireplumber pavucontrol alsa-utils rfkill parted udisks2 xserver-xorg-input-libinput xserver-xorg-video-fbdev xserver-xorg-video-vesa xterm sudo earlyoom zram-tools'
+sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get install -y --no-install-recommends calamares zenity lightdm lightdm-gtk-greeter systemd-sysv initramfs-tools grub-common grub2-common grub-efi-amd64-bin efibootmgr os-prober rsync dosfstools e2fsprogs btrfs-progs xfsprogs f2fs-tools network-manager network-manager-gnome bluez blueman pipewire pipewire-pulse wireplumber pavucontrol alsa-utils rfkill parted udisks2 xserver-xorg-input-libinput xserver-xorg-input-wacom xserver-xorg-video-fbdev xserver-xorg-video-vesa xterm sudo earlyoom zram-tools'
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'for g in sudo netdev audio video bluetooth; do getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" zorix || true; done; passwd -d zorix >/dev/null 2>&1 || true'
 sudo mkdir -p rootfs/etc/lightdm/lightdm.conf.d
 sudo tee rootfs/etc/lightdm/lightdm.conf.d/20-zorix-live.conf >/dev/null <<'EOF'
