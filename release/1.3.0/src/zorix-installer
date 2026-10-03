@@ -50,4 +50,4 @@ if [ "$AUTO" -eq 0 ]; then
   fi
 fi
 log "launching Calamares"
-exec sudo -n /usr/bin/calamares -d
+exec nice -n 5 ionice -c 2 -n 7 sudo -n /usr/bin/calamares -d
