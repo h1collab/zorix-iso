@@ -8,6 +8,7 @@ inputpid=
 splash=
 nmpid=
 btpid=
+glasslogpid=
 udisks_pid=
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8
 mkdir -p /run/zorix /run/dbus /run/user/1000 /run/zorix-fonts /run/fontconfig /var/log/zorix /var/lib/dbus /tmp/.X11-unix /etc/modprobe.d
@@ -157,9 +158,14 @@ if [ "$need_input_bridge" -eq 1 ]; then zorix-input >/var/log/zorix/input.log 2>
 stop_splash
 setxkbmap -layout us >/dev/null 2>&1 || true
 command -v xset >/dev/null 2>&1 && xset s off -dpms >/dev/null 2>&1 || true
-cleanup_display(){ stop_pid "$fbpid"; stop_pid "$inputpid"; stop_pid "$xpid"; stop_pid "$udisks_pid"; stop_pid "$btpid"; stop_pid "$nmpid"; }
+cleanup_display(){ stop_pid "$glasslogpid"; stop_pid "$fbpid"; stop_pid "$inputpid"; stop_pid "$xpid"; stop_pid "$udisks_pid"; stop_pid "$btpid"; stop_pid "$nmpid"; }
 trap cleanup_display EXIT HUP INT TERM
 stage "Launching Zorix Glass ($mode)"
+mkdir -p /home/zorix/.config/zorix
+touch /home/zorix/.config/zorix/glass.log
+chown -R 1000:1000 /home/zorix/.config/zorix
+tail -n 0 -F /home/zorix/.config/zorix/glass.log >/dev/ttyS0 2>/dev/null &
+glasslogpid=$!
 env LANG=C.UTF-8 DISPLAY=:0 XAUTHORITY="$XAUTHORITY" XDG_RUNTIME_DIR=/run/user/1000 XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=Zorix XCURSOR_PATH=/usr/share/icons XCURSOR_THEME=ZorixGlass XCURSOR_SIZE=32 ZORIX_RENDER_MODE="$mode" /usr/bin/zorix-run-user dbus-run-session -- /usr/bin/zorix-session-supervisor
 status=$?
 echo "Zorix Glass session exited with status $status"
