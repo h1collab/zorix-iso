@@ -77,12 +77,18 @@ jobs:
             if grep -Fq 'ZORIX_STAGE:Launching Zorix Glass (' qemu-serial.log; then
               grep -Fq 'LIQUID GLASS LIVE 1.3.0' qemu-serial.log
               disk_count="$(grep -o 'ZORIX_DISKS:[0-9][0-9]*' qemu-serial.log | tail -n1 | cut -d: -f2 || true)"
+              parted_count="$(grep -o 'ZORIX_PARTED_DISKS:[0-9][0-9]*' qemu-serial.log | tail -n1 | cut -d: -f2 || true)"
               if [ -z "$disk_count" ] || [ "$disk_count" -lt 1 ]; then
-                echo "SATA validation failed: no disk was detected by the Live system." >&2
+                echo "SATA validation failed: no disk was detected by the Live kernel." >&2
                 cat qemu-serial.log >&2
                 exit 1
               fi
-              echo "PASS: candidate reached Glass and detected $disk_count disk(s), including the attached SATA test disk."
+              if [ -z "$parted_count" ] || [ "$parted_count" -lt 1 ]; then
+                echo "SATA validation failed: libparted could not enumerate the attached disk." >&2
+                cat qemu-serial.log >&2
+                exit 1
+              fi
+              echo "PASS: candidate reached Glass; kernel detected $disk_count disk(s) and libparted enumerated $parted_count disk(s)."
               cat qemu-serial.log
               exit 0
             fi
