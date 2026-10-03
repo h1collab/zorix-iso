@@ -54,7 +54,9 @@ jobs:
           grep -Fq 'attempt=1' release/1.3.0/runtime/glass-session.sh
           grep -Fq 'zorix-glass-ready' release/1.3.0/runtime/glass-session.sh
           grep -Fq 'ZORIX_GLASS_READY' release/1.3.0/runtime/glass_server.py
-          grep -Fq "argv += ['--disable-gpu']" release/1.3.0/runtime/glass_server.py
+          grep -Fq -- "'--disable-gpu'," release/1.3.0/runtime/glass_server.py
+          grep -Fq -- "'--disable-features=Vulkan,UseSkiaRenderer,Dawn,WebGPU,CanvasOopRasterization'," release/1.3.0/runtime/glass_server.py
+          grep -Fq 'ZORIX_GLASS_HEARTBEAT' release/1.3.0/runtime/glass_server.py
           ! grep -Fq -- '--disable-gpu-compositing' release/1.3.0/runtime/glass_server.py
           grep -Fq 'xserver-xorg-input-wacom' release/1.3.0/tools/build-candidate.sh
           grep -Fq '/api/volumes' release/1.3.0/runtime/glass_server.py
