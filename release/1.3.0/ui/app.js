@@ -87,12 +87,16 @@ function bootGlass(){
     icons();
     initWindowDrag();
     tick();
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    setTimeout(()=>{
+      const root=document.documentElement;
+      const body=document.body;
+      if(!root||!body||!$('#dock')||!$('#clock')){reportStartupError('ready-dom',new Error('Required desktop DOM is incomplete'));return}
       api('ready',{render:renderMode}).then(()=>{
+        root.dataset.glassReady='true';
         let beat=0;
         setInterval(()=>api('heartbeat',{beat:++beat,render:renderMode}).catch(()=>{}),3000);
       }).catch(e=>reportStartupError('ready',e));
-    }));
+    },1200);
   }catch(e){
     reportStartupError('bootstrap',e);
     document.body.classList.add('bootstrap-failed');
