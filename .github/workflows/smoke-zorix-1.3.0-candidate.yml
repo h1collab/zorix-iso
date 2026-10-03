@@ -23,7 +23,7 @@ jobs:
       - name: Install QEMU and OVMF
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-x86 ovmf
+          sudo apt-get install -y -qq qemu-system-x86 ovmf parted
 
       - name: Download candidate artifact
         uses: actions/download-artifact@v4
@@ -56,6 +56,7 @@ jobs:
           fi
           cp "$VARS" OVMF_VARS.fd
           truncate -s 2G sata-test.img
+          parted -s sata-test.img mklabel gpt
           : > qemu-serial.log
           timeout --signal=TERM --kill-after=5s 300s qemu-system-x86_64 \
             -machine q35,accel=tcg -cpu max -smp 2 -m 8192 \
