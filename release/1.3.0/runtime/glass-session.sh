@@ -40,7 +40,7 @@ if [ -e /etc/zorix-live ] && command -v zorix-installer >/dev/null 2>&1; then
   marker="${XDG_RUNTIME_DIR:-/tmp}/zorix-installer-autostarted"
   if [ ! -e "$marker" ]; then
     : >"$marker"
-    ( sleep 1.5; /usr/bin/zorix-installer --autostart ) >>"$HOME/.config/zorix/installer-autostart.log" 2>&1 &
+    ( sleep 4; /usr/bin/zorix-installer --autostart ) >>"$HOME/.config/zorix/installer-autostart.log" 2>&1 &
     installerpid=$!
   fi
 fi
