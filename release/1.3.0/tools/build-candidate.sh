@@ -114,7 +114,7 @@ for deb in rootfs/tmp/diffutils_*.deb rootfs/tmp/libc-bin_*.deb; do
 done
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get -y --fix-broken install'
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get -y dist-upgrade'
-sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get install -y --no-install-recommends calamares zenity lightdm lightdm-gtk-greeter systemd-sysv initramfs-tools grub-common grub2-common grub-efi-amd64-bin efibootmgr os-prober rsync dosfstools e2fsprogs btrfs-progs xfsprogs f2fs-tools network-manager network-manager-gnome bluez blueman pipewire pipewire-pulse wireplumber pavucontrol alsa-utils rfkill parted udisks2 xserver-xorg-input-libinput xserver-xorg-input-wacom xserver-xorg-video-fbdev xserver-xorg-video-vesa xterm sudo earlyoom zram-tools'
+sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'apt-get install -y --no-install-recommends calamares zenity lightdm lightdm-gtk-greeter systemd-sysv initramfs-tools grub-common grub2-common grub-efi-amd64-bin efibootmgr os-prober rsync dosfstools e2fsprogs btrfs-progs xfsprogs f2fs-tools network-manager network-manager-gnome bluez blueman pipewire pipewire-pulse wireplumber pavucontrol alsa-utils rfkill parted udisks2 udiskie xserver-xorg-input-libinput xserver-xorg-input-wacom xserver-xorg-video-fbdev xserver-xorg-video-vesa xterm sudo earlyoom zram-tools'
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" /bin/sh -c 'for g in sudo netdev audio video bluetooth; do getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" zorix || true; done; passwd -d zorix >/dev/null 2>&1 || true'
 sudo mkdir -p rootfs/etc/lightdm/lightdm.conf.d
 sudo tee rootfs/etc/lightdm/lightdm.conf.d/20-zorix-live.conf >/dev/null <<'EOF'
