@@ -16,6 +16,9 @@ try{if(token)sessionStorage.setItem('zorix-token',token);history.replaceState(nu
 let settings={},system={},connectivity={},discoveredApps=[],currentPanel='',currentPath='',currentFileRoot='home',currentSettingsSection='appearance',toastTimer,focusRemaining=1500,focusRunning=false,focusDeadline=0,calc='';
 const $=s=>document.querySelector(s), titles={launcher:'Applications',files:'Zorix Files',notes:'Zorix Notes',tasks:'Flow Board',settings:'Settings',control:'Control Center',compatibility:'Play & Compatibility',system:'System Information',performance:'Live Activity',activity:'Recent Activity',glasslab:'Glass Lab',rustlab:'Rust Layer',about:'About Zorix',focus:'Focus Space',calculator:'Calculator',calendar:'Calendar',welcome:'Welcome to Zorix',support:'Support & Recovery'};
 async function api(path,data){const opt={headers:{'X-Zorix-Token':token}};if(data!==undefined){opt.method='POST';opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(data)}const r=await fetch('/api/'+path,opt);const d=await r.json();if(!r.ok)throw Error(d.error||'Request failed');return d}
+function reportStartupError(kind,error){try{fetch('/api/client-error',{method:'POST',headers:{'X-Zorix-Token':token,'Content-Type':'application/json'},body:JSON.stringify({kind,message:String(error?.message||error),stack:String(error?.stack||'').slice(0,1200)})})}catch{}}
+window.addEventListener('error',e=>reportStartupError('error',e.error||e.message));
+window.addEventListener('unhandledrejection',e=>reportStartupError('rejection',e.reason));
 function toast(text){$('#toast').textContent=text;$('#toast').classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.add('hidden'),3500)}
 function applySettings(){document.body.classList.toggle('dawn',settings.theme==='dawn');document.body.classList.toggle('midnight',settings.theme==='midnight');document.body.classList.toggle('opaque',!!settings.reducedTransparency);document.body.classList.toggle('reduced-motion',!!settings.reducedMotion);document.body.classList.toggle('high-contrast',!!settings.contrast);document.body.classList.toggle('large-text',!!settings.largeText);document.body.classList.toggle('no-wallpaper-motion',settings.wallpaperMotion===false);document.documentElement.lang=settings.language||'en';const g=Number(settings.glassIntensity||64);document.documentElement.style.setProperty('--glass-opacity',String(Math.max(.42,Math.min(.82,g/100))));document.documentElement.style.setProperty('--glass-blur',`${Math.round(8+g*.12)}px`)}
 async function updateSettings(d){settings=await api('settings',d);applySettings();return settings}
@@ -79,4 +82,21 @@ function initWindowDrag(){const handle=$('#window-drag-handle'),w=$('#window');i
 function closePanel(){$('#overlay').classList.add('hidden');currentPanel='';resetWindowPosition()}
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;try{if(b.dataset.panel)await panel(b.dataset.panel);else if(b.dataset.app)await launch(b.dataset.app);else if(b.dataset.toggle){const k=b.dataset.toggle;await updateSettings({[k]:!settings[k]});b.classList.toggle('on',settings[k]);b.setAttribute('aria-checked',settings[k])}else if(b.dataset.settingsSection){await showSettings(b.dataset.settingsSection)}else if(b.dataset.language){await updateSettings({language:b.dataset.language});await showSettings('general')}else if(b.dataset.theme){await updateSettings({theme:b.dataset.theme});if(currentPanel==='settings')await showSettings('appearance');else toast('Theme changed')}else if(b.dataset.fileRoot){currentFileRoot=b.dataset.fileRoot;currentPath='';await showFiles()}else if(b.dataset.dir){currentPath=[currentPath,b.dataset.dir].filter(Boolean).join('/');await showFiles()}else if(b.dataset.calc)calcKey(b.dataset.calc);else if(b.dataset.taskToggle)await taskAction('toggle',{id:b.dataset.taskToggle});else if(b.dataset.taskDelete)await taskAction('delete',{id:b.dataset.taskDelete});else if(b.dataset.power){const a=b.dataset.power;setContent('<h3 class="panel-heading">'+(a==='reboot'?'Restart Zorix?':'Shut down Zorix?')+'</h3><p class="notice">Unsaved files and all Live-session changes will be lost. Export important files first.</p><button class="primary" id="confirm-power">Confirm '+a+'</button> <button class="pill" data-panel="control">Cancel</button>');$('#confirm-power').onclick=async()=>{try{await api('power',{action:a,confirmation:a});toast('Power action requested')}catch(e){toast(e.message)}}}}catch(e){toast(e.message)}});
 $('#close').onclick=closePanel;$('#overlay').addEventListener('click',e=>{if(e.target===$('#overlay'))closePanel()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closePanel();if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();panel('launcher')}});
-icons();initWindowDrag();tick();setInterval(tick,1000);api('settings').then(s=>{settings=s;applySettings();tick()}).catch(e=>toast(e.message));refreshSystem();setInterval(refreshSystem,30000);refreshConnectivity();setInterval(refreshConnectivity,15000);refreshApps();setInterval(refreshApps,60000);requestAnimationFrame(()=>requestAnimationFrame(()=>api('ready',{render:renderMode}).catch(()=>{})));window.zorixCalculate=calculate;
+function bootGlass(){
+  try{
+    icons();
+    initWindowDrag();
+    tick();
+    requestAnimationFrame(()=>requestAnimationFrame(()=>api('ready',{render:renderMode}).catch(e=>reportStartupError('ready',e))));
+  }catch(e){
+    reportStartupError('bootstrap',e);
+    document.body.classList.add('bootstrap-failed');
+  }
+  setInterval(()=>{try{tick()}catch(e){reportStartupError('clock',e)}},1000);
+  api('settings').then(v=>{settings=v;applySettings();tick()}).catch(e=>toast(e.message));
+  setTimeout(()=>refreshSystem(),0);setInterval(refreshSystem,30000);
+  setTimeout(()=>refreshConnectivity(),250);setInterval(refreshConnectivity,15000);
+  setTimeout(()=>refreshApps(),500);setInterval(refreshApps,60000);
+  window.zorixCalculate=calculate;
+}
+bootGlass();
