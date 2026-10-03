@@ -174,6 +174,27 @@ class State:
     battery={'present':True,'name':bat.name,'capacity':int((bat/'capacity').read_text().strip()),'status':(bat/'status').read_text().strip()}; break
    except (OSError,ValueError): continue
   return {'network':network,'bluetooth':bt,'audio':audio,'battery':battery}
+ def mounted_volumes(self):
+  roots=[]
+  for base in (pathlib.Path('/media')/self.home.name,pathlib.Path('/run/media')/self.home.name):
+   if not base.is_dir():continue
+   try:
+    for p in sorted(base.iterdir(),key=lambda x:x.name.casefold()):
+     try:
+      if not p.is_dir() or p.is_symlink():continue
+      ident='volume:'+hashlib.sha256(str(p.resolve()).encode()).hexdigest()[:16]
+      roots.append({'id':ident,'name':p.name[:80],'path':str(p.resolve())})
+     except OSError:continue
+   except OSError:continue
+  return roots[:32]
+ def volume_path(self,ident):
+  if not isinstance(ident,str) or not ident.startswith('volume:'):raise ValueError('Invalid volume id')
+  for item in self.mounted_volumes():
+   if item['id']==ident:
+    p=pathlib.Path(item['path']).resolve()
+    for base in (pathlib.Path('/media').resolve(),pathlib.Path('/run/media').resolve()):
+     if p.is_relative_to(base):return p
+  raise ValueError('Mounted volume not found')
  def task_list(self):
   try:
    data=json.loads(self.tasks.read_text())
@@ -246,13 +267,20 @@ class Handler(BaseHTTPRequestHandler):
     if path=='/api/system':return self.send(200,self.s.system())
     if path=='/api/connectivity':return self.send(200,self.s.connectivity())
     if path=='/api/apps':return self.send(200,{'apps':self.s.desktop_apps()})
+    if path=='/api/volumes':return self.send(200,{'volumes':self.s.mounted_volumes()})
     if path=='/api/settings':return self.send(200,self.s.settings())
     if path=='/api/notes':
      self.s.safe_path(str(self.s.notes))
      if self.s.notes.is_symlink():raise ValueError('Note file is a symbolic link')
      return self.send(200,{'text':self.s.notes.read_text()[:200000] if self.s.notes.exists() else ''})
     if path=='/api/files':
-     name=urllib.parse.parse_qs(parsed.query).get('path',[''])[0]; p=self.s.safe_path(name)
+     qs=urllib.parse.parse_qs(parsed.query); name=qs.get('path',[''])[0]; rootid=qs.get('root',['home'])[0]
+     if rootid=='home':
+      root=self.s.home
+     else:
+      root=self.s.volume_path(rootid)
+     p=(root/name).resolve()
+     if not p.is_relative_to(root):raise ValueError('Path must remain inside the selected root')
      if not p.is_dir():raise ValueError('Not a directory')
      result=[]
      for x in sorted(p.iterdir(),key=lambda p:(not p.is_dir(),p.name.casefold())):
@@ -261,7 +289,7 @@ class Handler(BaseHTTPRequestHandler):
        result.append({'name':x.name,'directory':x.is_dir(),'size':x.stat().st_size,'link':x.is_symlink()})
       except OSError:continue
       if len(result)==500:break
-     return self.send(200,{'path':str(p.relative_to(self.s.home)),'items':result})
+     return self.send(200,{'root':rootid,'path':str(p.relative_to(root)),'items':result})
     if path=='/api/events':return self.send(200,{'events':self.s.events})
     if path=='/api/tasks':return self.send(200,{'tasks':self.s.task_list()})
     if path=='/api/processes':return self.send(200,{'processes':self.s.process_list()})
