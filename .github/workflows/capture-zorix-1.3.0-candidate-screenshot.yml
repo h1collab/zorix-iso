@@ -89,7 +89,11 @@ jobs:
             kill -0 "$pid" 2>/dev/null || { cat qemu-serial.log >&2; exit 1; }
             sleep 1
           done
-          test "$ready" = 1
+          if [ "$ready" != 1 ]; then
+            echo 'Glass READY was not observed before timeout.' >&2
+            cat qemu-serial.log >&2
+            exit 1
+          fi
           grep -Fq 'ZORIX_DISKS:1' qemu-serial.log
           grep -Fq 'ZORIX_PARTED_DISKS:1' qemu-serial.log
 
