@@ -79,7 +79,12 @@ done
 printf 'ZORIX_DISKS:%s\n' "$disk_count" >/dev/ttyS0 2>/dev/null || true
 parted_count=0
 if command -v parted >/dev/null 2>&1; then
-  parted_count=$(parted -lm 2>/dev/null | awk -F: '$1 ~ "^/dev/(sd|vd|nvme)" {n++} END {print n+0}')
+  parted -m -l >/var/log/zorix/parted.log 2>&1 || true
+  while IFS=: read -r dev rest; do
+    case "$dev" in
+      /dev/sd*|/dev/vd*|/dev/nvme*) parted_count=$((parted_count+1)) ;;
+    esac
+  done </var/log/zorix/parted.log
 fi
 printf 'ZORIX_PARTED_DISKS:%s\n' "$parted_count" >/dev/ttyS0 2>/dev/null || true
 stage 'Starting local services'
