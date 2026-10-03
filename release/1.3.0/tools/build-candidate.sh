@@ -29,6 +29,7 @@ sudo chown -R "$(id -u):$(id -g)" rootfs
 
 mkdir -p rootfs/usr/share/zorix/glass/assets rootfs/usr/lib/zorix
 cp release/1.3.0/ui/index.html rootfs/usr/share/zorix/glass/index.html
+cp release/1.3.0/ui/boot.js rootfs/usr/share/zorix/glass/boot.js
 cp release/1.3.0/ui/app.js rootfs/usr/share/zorix/glass/app.js
 cp release/1.3.0/ui/style.css rootfs/usr/share/zorix/glass/style.css
 cp -a release/1.3.0/ui/assets/. rootfs/usr/share/zorix/glass/assets/
