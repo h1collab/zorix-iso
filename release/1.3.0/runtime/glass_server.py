@@ -28,6 +28,13 @@ APPS = {
  'bluetooth': ['/usr/bin/blueman-manager'],
  'audio': ['/usr/bin/pavucontrol'],
 }
+def serial(message):
+ try:
+  with open('/dev/ttyS0','w',encoding='utf-8',buffering=1) as f:
+   f.write(str(message)+'\n')
+ except OSError:
+  pass
+
 DEFAULT = {'theme':'aurora', 'reducedMotion':False, 'reducedTransparency':False, 'contrast':False, 'language':'en', 'welcomeDone':False, 'glassIntensity':64, 'wallpaperMotion':False, 'largeText':False}
 
 class State:
@@ -297,7 +304,7 @@ class Handler(BaseHTTPRequestHandler):
     return self.send(404,{'error':'Unknown API'})
    path='/index.html' if path=='/' else path
    if path in ('/index.html','/style.css','/app.js'):
-    print('ZORIX_UI_GET:'+path,flush=True)
+    print('ZORIX_UI_GET:'+path,flush=True); serial('ZORIX_UI_GET:'+path)
    p=(self.s.ui/urllib.parse.unquote(path).lstrip('/')).resolve()
    if not p.is_relative_to(self.s.ui) or not p.is_file():return self.send(404,{'error':'Not found'})
    return self.send(200,p.read_bytes(),mimetypes.guess_type(p)[0] or 'application/octet-stream')
@@ -316,7 +323,7 @@ class Handler(BaseHTTPRequestHandler):
      render=str(data.get('render','unknown'))[:32]
      ready=pathlib.Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/'zorix-glass-ready'
      ready.write_text(render+'\n')
-     print('ZORIX_GLASS_READY:'+render,flush=True)
+     print('ZORIX_GLASS_READY:'+render,flush=True); serial('ZORIX_GLASS_READY:'+render)
      self.s.record('glass-ready')
      return self.send(200,{'ready':True})
     if path=='/api/settings':
@@ -403,10 +410,10 @@ def main():
     argv += ['--disable-gpu']
    else:
     argv += ['--enable-gpu-rasterization']
-   print('ZORIX_BROWSER_START:'+os.environ.get('ZORIX_RENDER_MODE','unknown'),flush=True)
+   print('ZORIX_BROWSER_START:'+os.environ.get('ZORIX_RENDER_MODE','unknown'),flush=True); serial('ZORIX_BROWSER_START:'+os.environ.get('ZORIX_RENDER_MODE','unknown'))
    child=subprocess.Popen(argv)
    browser_rc=child.wait()
-   print('ZORIX_BROWSER_EXIT:'+str(browser_rc),flush=True)
+   print('ZORIX_BROWSER_EXIT:'+str(browser_rc),flush=True); serial('ZORIX_BROWSER_EXIT:'+str(browser_rc))
    if browser_rc!=0:
     raise SystemExit(browser_rc)
   else:
