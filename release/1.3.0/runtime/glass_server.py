@@ -352,6 +352,8 @@ class Handler(BaseHTTPRequestHandler):
      beat=int(data.get('beat',0))
      render=str(data.get('render','unknown'))[:32]
      if beat>0:
+      heartbeat=pathlib.Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/'zorix-glass-heartbeat'
+      heartbeat.write_text(str(beat)+'\n')
       line='ZORIX_GLASS_HEARTBEAT:'+render+':'+str(beat)
       print(line,flush=True); serial(line)
      return self.send(200,{'alive':True})
