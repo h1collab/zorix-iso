@@ -48,6 +48,10 @@ jobs:
           grep -Fq 'udiskie --automount' release/1.3.0/runtime/glass-session.sh
           grep -Fq 'Driver "libinput"' release/1.3.0/xorg/40-zorix-libinput.conf
           grep -Fq 'Option "Tapping" "on"' release/1.3.0/xorg/40-zorix-libinput.conf
+          ! grep -Fq 'Option "ClickMethod" "clickfinger"' release/1.3.0/xorg/40-zorix-libinput.conf
+          grep -Fq 'ZORIX_PARTED_DISKS' release/1.3.0/runtime/live-boot.sh
+          grep -Fq 'exit 75' release/1.3.0/src/zorix-installer
+          grep -Fq 'attempt=1' release/1.3.0/runtime/glass-session.sh
           grep -Fq 'xserver-xorg-input-wacom' release/1.3.0/tools/build-candidate.sh
           grep -Fq '/api/volumes' release/1.3.0/runtime/glass_server.py
       - name: Validate Glass performance override
