@@ -296,6 +296,8 @@ class Handler(BaseHTTPRequestHandler):
     if path=='/api/hardware':return self.send(200,self.s.hardware())
     return self.send(404,{'error':'Unknown API'})
    path='/index.html' if path=='/' else path
+   if path in ('/index.html','/style.css','/app.js'):
+    print('ZORIX_UI_GET:'+path,flush=True)
    p=(self.s.ui/urllib.parse.unquote(path).lstrip('/')).resolve()
    if not p.is_relative_to(self.s.ui) or not p.is_file():return self.send(404,{'error':'Not found'})
    return self.send(200,p.read_bytes(),mimetypes.guess_type(p)[0] or 'application/octet-stream')
@@ -310,6 +312,13 @@ class Handler(BaseHTTPRequestHandler):
    if not isinstance(data,dict):raise ValueError('Expected an object')
    path=urllib.parse.urlsplit(self.path).path
    with self.s.lock:
+    if path=='/api/ready':
+     render=str(data.get('render','unknown'))[:32]
+     ready=pathlib.Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/'zorix-glass-ready'
+     ready.write_text(render+'\n')
+     print('ZORIX_GLASS_READY:'+render,flush=True)
+     self.s.record('glass-ready')
+     return self.send(200,{'ready':True})
     if path=='/api/settings':
      settings=self.s.settings()
      for k,v in data.items():
@@ -391,14 +400,19 @@ def main():
    # Native Xorg can use Chromium's normal GPU auto-detection. Portable Xvfb
    # has no real GPU, so keep software rendering there to avoid probe stalls.
    if os.environ.get('ZORIX_RENDER_MODE')=='portable':
-    argv += ['--disable-gpu','--disable-gpu-compositing']
+    argv += ['--disable-gpu']
    else:
     argv += ['--enable-gpu-rasterization']
-   child=subprocess.Popen(argv);child.wait()
+   print('ZORIX_BROWSER_START:'+os.environ.get('ZORIX_RENDER_MODE','unknown'),flush=True)
+   child=subprocess.Popen(argv)
+   browser_rc=child.wait()
+   print('ZORIX_BROWSER_EXIT:'+str(browser_rc),flush=True)
+   if browser_rc!=0:
+    raise SystemExit(browser_rc)
   else:
    while True:time.sleep(1)
  except KeyboardInterrupt:pass
  finally:
   server.shutdown()
   if child and child.poll() is None:child.terminate()
-if __name__=='__main__':main()
+if __name__=='__main__':sys.exit(main() or 0)
