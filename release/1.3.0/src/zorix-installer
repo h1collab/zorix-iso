@@ -54,4 +54,5 @@ if [ "$AUTO" -eq 0 ]; then
   fi
 fi
 log "launching Calamares"
-exec nice -n 5 ionice -c 2 -n 7 sudo -n /usr/bin/calamares -d
+printf '%s\n' 'ZORIX_CALAMARES_EXEC' >>"${HOME:-/home/zorix}/.config/zorix/glass.log" 2>/dev/null || true
+exec nice -n 10 ionice -c 3 sudo -n /usr/bin/calamares -d
