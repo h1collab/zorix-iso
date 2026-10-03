@@ -55,12 +55,15 @@ jobs:
             VARS=/usr/share/OVMF/OVMF_VARS.fd
           fi
           cp "$VARS" OVMF_VARS.fd
+          truncate -s 2G sata-test.img
           : > qemu-serial.log
           timeout --signal=TERM --kill-after=5s 300s qemu-system-x86_64 \
             -machine q35,accel=tcg -cpu max -smp 2 -m 4096 \
             -drive if=pflash,format=raw,readonly=on,file="$CODE" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
             -drive media=cdrom,format=raw,readonly=on,file="$ISO" \
+            -drive file=sata-test.img,format=raw,if=none,id=sata0 \
+            -device ide-hd,drive=sata0,bus=ide.0 \
             -boot order=d,menu=off -vga std -display none \
             -serial file:qemu-serial.log -monitor none -no-reboot -no-shutdown &
           pid=$!
@@ -73,7 +76,13 @@ jobs:
             fi
             if grep -Fq 'ZORIX_STAGE:Launching Zorix Glass (' qemu-serial.log; then
               grep -Fq 'LIQUID GLASS LIVE 1.3.0' qemu-serial.log
-              echo 'PASS: candidate reached Zorix Glass launch stage under UEFI.'
+              disk_count="$(grep -o 'ZORIX_DISKS:[0-9][0-9]*' qemu-serial.log | tail -n1 | cut -d: -f2 || true)"
+              if [ -z "$disk_count" ] || [ "$disk_count" -lt 1 ]; then
+                echo "SATA validation failed: no disk was detected by the Live system." >&2
+                cat qemu-serial.log >&2
+                exit 1
+              fi
+              echo "PASS: candidate reached Glass and detected $disk_count disk(s), including the attached SATA test disk."
               cat qemu-serial.log
               exit 0
             fi
