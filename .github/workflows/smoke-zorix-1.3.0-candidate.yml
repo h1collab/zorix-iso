@@ -11,8 +11,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: smoke-zorix-1.3.0-candidate
-  cancel-in-progress: true
+  group: smoke-zorix-1.3.0-candidate-${{ github.event.workflow_run.id || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   qemu:
