@@ -46,7 +46,20 @@ if [ -e /etc/zorix-live ] && command -v zorix-installer >/dev/null 2>&1; then
   marker="${XDG_RUNTIME_DIR:-/tmp}/zorix-installer-autostarted"
   if [ ! -e "$marker" ]; then
     : >"$marker"
-    ( sleep 4; /usr/bin/zorix-installer --autostart ) >>"$HOME/.config/zorix/installer-autostart.log" 2>&1 &
+    (
+      sleep 4
+      attempt=1
+      while [ "$attempt" -le 4 ]; do
+        /usr/bin/zorix-installer --autostart
+        rc=$?
+        [ "$rc" -ne 75 ] && exit "$rc"
+        echo "Installer storage wait attempt $attempt/4" >&2
+        attempt=$((attempt+1))
+        [ "$attempt" -le 4 ] && sleep 4
+      done
+      echo "Installer autostart gave up after bounded storage retries." >&2
+      exit 75
+    ) >>"$HOME/.config/zorix/installer-autostart.log" 2>&1 &
     installerpid=$!
   fi
 fi
