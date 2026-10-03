@@ -253,7 +253,10 @@ class Handler(BaseHTTPRequestHandler):
   self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff')
   self.send_header('Referrer-Policy','no-referrer');self.send_header('X-Frame-Options','DENY')
   self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'")
-  self.end_headers();self.wfile.write(data)
+  try:
+   self.end_headers();self.wfile.write(data)
+  except (BrokenPipeError,ConnectionResetError):
+   return
  def allowed_host(self):
   return self.headers.get('Host','')==f'127.0.0.1:{self.server.server_port}'
  def auth(self):
@@ -319,6 +322,14 @@ class Handler(BaseHTTPRequestHandler):
    if not isinstance(data,dict):raise ValueError('Expected an object')
    path=urllib.parse.urlsplit(self.path).path
    with self.s.lock:
+    if path=='/api/client-error':
+     kind=str(data.get('kind','client'))[:40]
+     message=str(data.get('message','unknown'))[:400]
+     stack=str(data.get('stack',''))[:1200]
+     line='ZORIX_JS_ERROR:'+kind+':'+message
+     print(line,flush=True); serial(line)
+     if stack: print(stack,flush=True)
+     return self.send(200,{'logged':True})
     if path=='/api/ready':
      render=str(data.get('render','unknown'))[:32]
      ready=pathlib.Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/'zorix-glass-ready'
