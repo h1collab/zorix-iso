@@ -58,6 +58,9 @@ jobs:
           grep -Fq -- "'--disable-features=Vulkan,UseSkiaRenderer,Dawn,WebGPU,CanvasOopRasterization'," release/1.3.0/runtime/glass_server.py
           grep -Fq 'ZORIX_GLASS_HEARTBEAT' release/1.3.0/runtime/glass_server.py
           ! grep -Fq -- '--disable-gpu-compositing' release/1.3.0/runtime/glass_server.py
+          ! grep -Fq -- '--no-zygote' release/1.3.0/runtime/glass_server.py
+          ! grep -Fq -- '--single-process' release/1.3.0/runtime/glass_server.py
+          grep -Fq '/usr/lib/chromium/chromium' release/1.3.0/runtime/glass_server.py
           grep -Fq 'xserver-xorg-input-wacom' release/1.3.0/tools/build-candidate.sh
           grep -Fq '/api/volumes' release/1.3.0/runtime/glass_server.py
       - name: Validate Glass performance override
