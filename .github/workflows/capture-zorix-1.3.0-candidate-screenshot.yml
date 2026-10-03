@@ -97,8 +97,26 @@ jobs:
           grep -Fq 'ZORIX_DISKS:1' qemu-serial.log
           grep -Fq 'ZORIX_PARTED_DISKS:1' qemu-serial.log
 
+          stable=0
+          for second in $(seq 1 25); do
+            if grep -Fq 'ZORIX_BROWSER_EXIT:' qemu-serial.log; then
+              cat qemu-serial.log >&2
+              exit 1
+            fi
+            beats="$(grep -c 'ZORIX_GLASS_HEARTBEAT:portable:' qemu-serial.log || true)"
+            if [ "$beats" -ge 5 ]; then
+              stable=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$stable" != 1 ]; then
+            echo 'Glass renderer did not remain healthy for the 15-second stability window.' >&2
+            cat qemu-serial.log >&2
+            exit 1
+          fi
+
           mkdir -p captures
-          sleep 3
           for n in 1 2 3; do
             printf 'screendump captures/zorix-candidate-%s.ppm\n' "$n" | socat - UNIX-CONNECT:/tmp/zorix-monitor.sock
             test -s "captures/zorix-candidate-$n.ppm"
