@@ -308,11 +308,11 @@ class Handler(BaseHTTPRequestHandler):
     if path=='/api/hardware':return self.send(200,self.s.hardware())
     return self.send(404,{'error':'Unknown API'})
    path='/index.html' if path=='/' else path
-   if path in ('/index.html','/style.css','/app.js'):
+   if path in ('/index.html','/style.css','/boot.js','/app.js'):
     print('ZORIX_UI_GET:'+path,flush=True); serial('ZORIX_UI_GET:'+path)
    p=(self.s.ui/urllib.parse.unquote(path).lstrip('/')).resolve()
    if not p.is_relative_to(self.s.ui) or not p.is_file():return self.send(404,{'error':'Not found'})
-   return self.send(200,p.read_bytes(),mimetypes.guess_type(p)[0] or 'application/octet-stream')
+   kind='application/javascript' if p.suffix=='.js' else (mimetypes.guess_type(p)[0] or 'application/octet-stream'); return self.send(200,p.read_bytes(),kind)
   except (OSError,ValueError) as e:return self.send(400,{'error':str(e)[:200]})
  def do_POST(self):
   if not self.auth():
@@ -327,6 +327,12 @@ class Handler(BaseHTTPRequestHandler):
    if not isinstance(data,dict):raise ValueError('Expected an object')
    path=urllib.parse.urlsplit(self.path).path
    with self.s.lock:
+    if path=='/api/boot-probe':
+     ua=str(data.get('ua',''))[:180]
+     state=str(data.get('readyState',''))[:32]
+     line='ZORIX_BOOT_JS:'+state+':'+ua
+     print(line,flush=True); serial(line)
+     return self.send(200,{'ok':True})
     if path=='/api/client-error':
      kind=str(data.get('kind','client'))[:40]
      message=str(data.get('message','unknown'))[:400]
@@ -427,7 +433,7 @@ def main():
  try:
   if not a.no_browser:
    chromium='/usr/lib/chromium/chromium' if os.access('/usr/lib/chromium/chromium',os.X_OK) else '/usr/bin/chromium'
-   argv=[chromium,'--app='+url,'--class=ZorixGlass','--user-data-dir='+str(state.config/'glass-browser'),'--no-first-run','--disable-sync','--disable-extensions','--disable-background-networking','--disable-component-update','--ozone-platform=x11','--disable-dev-shm-usage','--no-default-browser-check','--password-store=basic','--start-maximized','--renderer-process-limit=2','--disk-cache-size=67108864','--media-cache-size=33554432']
+   argv=[chromium,'--app='+url,'--class=ZorixGlass','--user-data-dir='+str(state.config/'glass-browser'),'--no-first-run','--disable-sync','--disable-extensions','--disable-background-networking','--disable-component-update','--ozone-platform=x11','--disable-dev-shm-usage','--no-default-browser-check','--password-store=basic','--start-maximized','--renderer-process-limit=2','--disk-cache-size=67108864','--media-cache-size=33554432','--enable-logging=stderr','--v=0']
    # Native Xorg can use Chromium's normal GPU auto-detection. Portable Xvfb
    # has no real GPU, so keep software rendering there to avoid probe stalls.
    if os.environ.get('ZORIX_RENDER_MODE')=='portable':
