@@ -51,6 +51,7 @@ jobs:
           grep -Fq 'Option "Tapping" "on"' release/1.3.0/xorg/40-zorix-libinput.conf
           ! grep -Fq 'Option "ClickMethod" "clickfinger"' release/1.3.0/xorg/40-zorix-libinput.conf
           grep -Fq 'ZORIX_PARTED_DISKS' release/1.3.0/runtime/live-boot.sh
+          grep -Fq -- '-pixdepths 24 -extension Composite' release/1.3.0/runtime/live-boot.sh
           grep -Fq 'exit 75' release/1.3.0/src/zorix-installer
           grep -Fq 'attempt=1' release/1.3.0/runtime/glass-session.sh
           grep -Fq 'zorix-glass-ready' release/1.3.0/runtime/glass-session.sh
