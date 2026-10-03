@@ -432,9 +432,7 @@ def main():
      '--disable-features=Vulkan,UseSkiaRenderer,Dawn,WebGPU,CanvasOopRasterization',
      '--disable-background-timer-throttling',
      '--disable-renderer-backgrounding',
-     '--disable-backgrounding-occluded-windows',
-     '--single-process',
-     '--no-zygote'
+     '--disable-backgrounding-occluded-windows'
     ]
    else:
     argv += ['--enable-gpu-rasterization']
