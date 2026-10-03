@@ -141,7 +141,7 @@ if [ "$mode" = auto ] || [ "$mode" = native ]; then
 fi
 if [ "$mode" = portable ]; then
  stage 'Starting software display server'; size=$(bounded 2s zorix-framebuffer --size 2>/dev/null) || size=1024x768; case "$size" in *x*) : ;; *) size=1024x768 ;; esac
- Xvfb :0 -screen 0 "${size}x24" -auth "$XAUTHORITY" -nolisten tcp -noreset +extension XTEST >/var/log/zorix/xvfb.log 2>&1 &
+ Xvfb :0 -screen 0 "${size}x24" -pixdepths 24 -extension Composite -auth "$XAUTHORITY" -nolisten tcp -noreset +extension XTEST >/var/log/zorix/xvfb.log 2>&1 &
  xpid=$!
  wait_x 40 || { echo 'Portable Xvfb failed.'; recovery; }
  stop_splash; printf '\033[9;0]' >/dev/tty1 2>/dev/null || true; stage 'Connecting software desktop to framebuffer'; rm -f /run/zorix/framebuffer-ready
