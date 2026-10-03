@@ -125,6 +125,12 @@ autologin-user-timeout=0
 user-session=zorix
 EOF
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" depmod 6.12.96+deb13-amd64 || true
+for mod in ahci libata sd_mod; do
+  find rootfs/lib/modules/6.12.96+deb13-amd64 -type f \( -name "$mod.ko" -o -name "$mod.ko.xz" -o -name "$mod.ko.zst" \) -print -quit | grep -q . || {
+    echo "Missing required storage kernel module: $mod" >&2
+    exit 1
+  }
+done
 sudo chroot rootfs /usr/bin/env PATH="$CHROOT_PATH" update-initramfs -c -k 6.12.96+deb13-amd64 || true
 
 sudo tee rootfs/etc/default/zramswap >/dev/null <<'EOF'
