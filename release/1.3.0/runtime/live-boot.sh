@@ -77,6 +77,11 @@ for dev in /sys/block/sd* /sys/block/vd* /sys/block/nvme*n*; do
   disk_count=$((disk_count+1))
 done
 printf 'ZORIX_DISKS:%s\n' "$disk_count" >/dev/ttyS0 2>/dev/null || true
+parted_count=0
+if command -v parted >/dev/null 2>&1; then
+  parted_count=$(parted -lm 2>/dev/null | awk -F: '$1 ~ "^/dev/(sd|vd|nvme)" {n++} END {print n+0}')
+fi
+printf 'ZORIX_PARTED_DISKS:%s\n' "$parted_count" >/dev/ttyS0 2>/dev/null || true
 stage 'Starting local services'
 dbus-uuidgen --ensure=/etc/machine-id || true
 ln -sf /etc/machine-id /var/lib/dbus/machine-id
