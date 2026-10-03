@@ -65,7 +65,7 @@ STATUS EFIAPI efi_main(HANDLE image,ST*system){
  say(L"\r\n   Z O R I X   O S   /   LIQUID GLASS LIVE 1.3.0\r\n\r\n");
  say(L"   [1] Safe desktop - VirtualBox/software path (default)\r\n");
  say(L"   [2] Native GPU display - accelerated/experimental\r\n   [3] Recovery console\r\n\r\n");
- say(L"   Press 1, 2 or 3. Default begins in 5 seconds.\r\n   Recommended VM memory: 8 GiB; 4 GiB minimum experimental.\r\n");
+ say(L"   Press 1, 2 or 3. Default begins in 5 seconds.\r\n   Recommended VM memory: 8 GiB; lower-memory boot is not validated.\r\n");
  unsigned choice=1;KEY key;for(unsigned i=0;i<50;i++){if(st->in&&!FAILED(st->in->read(st->in,&key))){if(key.unicode>='1'&&key.unicode<='3'){choice=key.unicode-'0';break;}if(key.unicode==13)break;}bs->stall(100000);}
  LI*li=NULL;FS*fs=NULL;STATUS s=bs->protocol(image,&loaded_guid,(void**)&li);if(FAILED(s))goto fail;
  s=bs->protocol(li->device,&fs_guid,(void**)&fs);if(FAILED(s))goto fail;
