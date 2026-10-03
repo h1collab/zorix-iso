@@ -58,7 +58,7 @@ jobs:
           truncate -s 2G sata-test.img
           : > qemu-serial.log
           timeout --signal=TERM --kill-after=5s 300s qemu-system-x86_64 \
-            -machine q35,accel=tcg -cpu max -smp 2 -m 4096 \
+            -machine q35,accel=tcg -cpu max -smp 2 -m 8192 \
             -drive if=pflash,format=raw,readonly=on,file="$CODE" \
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
             -drive media=cdrom,format=raw,readonly=on,file="$ISO" \
