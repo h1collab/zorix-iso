@@ -71,7 +71,11 @@ for host in /sys/class/scsi_host/host*; do [ -w "$host/scan" ] && printf '%s\n' 
 bounded 4s udevadm trigger --subsystem-match=block --action=add || true
 udevadm settle --timeout=8 || true
 lsblk -dno NAME,SIZE,TYPE,TRAN,MODEL 2>/dev/null || true
-disk_count=$(lsblk -dn -o TYPE 2>/dev/null | awk '$1=="disk"{n++} END{print n+0}')
+disk_count=0
+for dev in /sys/block/sd* /sys/block/vd* /sys/block/nvme*n*; do
+  [ -e "$dev/dev" ] || continue
+  disk_count=$((disk_count+1))
+done
 printf 'ZORIX_DISKS:%s\n' "$disk_count" >/dev/ttyS0 2>/dev/null || true
 stage 'Starting local services'
 dbus-uuidgen --ensure=/etc/machine-id || true
