@@ -63,7 +63,7 @@ jobs:
             -drive if=pflash,format=raw,file=OVMF_VARS.fd \
             -drive media=cdrom,format=raw,readonly=on,file="$ISO" \
             -drive file=sata-test.img,format=raw,if=none,id=sata0 \
-            -device ide-hd,drive=sata0,bus=ide.0 \
+            -device ide-hd,drive=sata0,bus=ide.1 \
             -boot order=d,menu=off -vga std -display none \
             -serial file:qemu-serial.log -monitor none -no-reboot -no-shutdown &
           pid=$!
