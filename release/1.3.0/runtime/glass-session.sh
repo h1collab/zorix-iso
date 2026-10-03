@@ -47,7 +47,19 @@ if [ -e /etc/zorix-live ] && command -v zorix-installer >/dev/null 2>&1; then
   if [ ! -e "$marker" ]; then
     : >"$marker"
     (
-      sleep 4
+      ready="${XDG_RUNTIME_DIR:-/tmp}/zorix-glass-ready"
+      waited=0
+      while [ "$waited" -lt 20 ] && [ ! -s "$ready" ]; do
+        sleep 1
+        waited=$((waited+1))
+      done
+      if [ ! -s "$ready" ]; then
+        echo "Installer autostart skipped: Glass did not report first-paint readiness within 20s." >&2
+        exit 76
+      fi
+      echo "Glass ready; starting installer autostart." >&2
+      printf 'ZORIX_INSTALLER_AUTOSTART:glass-ready\n' >/dev/ttyS0 2>/dev/null || true
+      sleep 1
       attempt=1
       while [ "$attempt" -le 4 ]; do
         /usr/bin/zorix-installer --autostart
@@ -64,9 +76,13 @@ if [ -e /etc/zorix-live ] && command -v zorix-installer >/dev/null 2>&1; then
   fi
 fi
 export CHROME_LOG_FILE="$HOME/.config/zorix/chromium.log"
+rm -f "${XDG_RUNTIME_DIR:-/tmp}/zorix-glass-ready"
 python3 /usr/lib/zorix/glass_server.py >>"$HOME/.config/zorix/glass.log" 2>&1
 status=$?
+printf 'ZORIX_GLASS_PROCESS_EXIT:%s\n' "$status" >/dev/ttyS0 2>/dev/null || true
 if [ "$status" -ne 0 ]; then
   echo "Zorix Glass broker/browser exited with status $status" >>"$HOME/.config/zorix/glass.log"
+  tail -n 80 "$HOME/.config/zorix/glass.log" >/dev/ttyS0 2>/dev/null || true
+  tail -n 80 "$HOME/.config/zorix/chromium.log" >/dev/ttyS0 2>/dev/null || true
 fi
 exit "$status"
