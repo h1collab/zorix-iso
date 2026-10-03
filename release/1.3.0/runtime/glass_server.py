@@ -418,7 +418,16 @@ def main():
    # Native Xorg can use Chromium's normal GPU auto-detection. Portable Xvfb
    # has no real GPU, so keep software rendering there to avoid probe stalls.
    if os.environ.get('ZORIX_RENDER_MODE')=='portable':
-    argv += ['--disable-gpu']
+    argv += [
+     '--disable-gpu',
+     '--disable-software-rasterizer=false',
+     '--disable-features=Vulkan,UseSkiaRenderer,Dawn,WebGPU,CanvasOopRasterization',
+     '--disable-background-timer-throttling',
+     '--disable-renderer-backgrounding',
+     '--disable-backgrounding-occluded-windows',
+     '--single-process',
+     '--no-zygote'
+    ]
    else:
     argv += ['--enable-gpu-rasterization']
    print('ZORIX_BROWSER_START:'+os.environ.get('ZORIX_RENDER_MODE','unknown'),flush=True); serial('ZORIX_BROWSER_START:'+os.environ.get('ZORIX_RENDER_MODE','unknown'))
