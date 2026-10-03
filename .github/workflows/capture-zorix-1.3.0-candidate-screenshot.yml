@@ -91,6 +91,12 @@ jobs:
           done
           if [ "$ready" != 1 ]; then
             echo 'Glass READY was not observed before timeout.' >&2
+            mkdir -p captures
+            printf 'screendump captures/zorix-timeout.ppm\n' | socat - UNIX-CONNECT:/tmp/zorix-monitor.sock || true
+            if [ -s captures/zorix-timeout.ppm ]; then
+              magick captures/zorix-timeout.ppm captures/zorix-timeout.png 2>/dev/null || convert captures/zorix-timeout.ppm captures/zorix-timeout.png || true
+            fi
+            cp qemu-serial.log captures/qemu-serial.log || true
             cat qemu-serial.log >&2
             exit 1
           fi
