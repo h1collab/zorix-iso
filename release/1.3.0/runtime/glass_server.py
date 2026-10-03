@@ -435,7 +435,17 @@ def main():
  try:
   if not a.no_browser:
    chromium='/usr/lib/chromium/chromium' if os.access('/usr/lib/chromium/chromium',os.X_OK) else '/usr/bin/chromium'
-   argv=[chromium,'--app='+url,'--class=ZorixGlass','--user-data-dir='+str(state.config/'glass-browser'),'--no-first-run','--disable-sync','--disable-extensions','--disable-background-networking','--disable-component-update','--ozone-platform=x11','--disable-dev-shm-usage','--no-default-browser-check','--password-store=basic','--start-maximized','--renderer-process-limit=2','--disk-cache-size=67108864','--media-cache-size=33554432','--enable-logging=stderr','--v=0']
+   runtime_dir=pathlib.Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))
+   profile=runtime_dir/'zorix-glass-browser'
+   shutil.rmtree(profile,ignore_errors=True)
+   profile.mkdir(parents=True,exist_ok=True,mode=0o700)
+   screen=os.environ.get('ZORIX_SCREEN_SIZE','1024x768')
+   try:
+    sw,sh=(int(x) for x in screen.lower().split('x',1))
+    if sw<640 or sh<480 or sw>7680 or sh>4320:raise ValueError()
+   except (ValueError,TypeError):
+    sw,sh=1024,768
+   argv=[chromium,'--app='+url,'--class=ZorixGlass','--user-data-dir='+str(profile),'--no-first-run','--disable-sync','--disable-extensions','--disable-background-networking','--disable-component-update','--ozone-platform=x11','--disable-dev-shm-usage','--no-default-browser-check','--password-store=basic','--window-position=0,0','--window-size='+str(sw)+','+str(sh),'--force-device-scale-factor=1','--disable-session-crashed-bubble','--renderer-process-limit=2','--disk-cache-size=67108864','--media-cache-size=33554432','--enable-logging=stderr','--v=0']
    # Native Xorg can use Chromium's normal GPU auto-detection. Portable Xvfb
    # has no real GPU, so keep software rendering there to avoid probe stalls.
    if os.environ.get('ZORIX_RENDER_MODE')=='portable':
