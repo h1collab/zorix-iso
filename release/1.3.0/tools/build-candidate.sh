@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Candidate builds are artifact-only: verified seed in, no Release mutation.
+# Rebuild trigger: storage-input validation
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 CHROOT_PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
