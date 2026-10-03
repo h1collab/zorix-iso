@@ -32,6 +32,10 @@ if [ "$uefi" != yes ]; then
   exit 2
 fi
 if printf '%s' "$disks" | grep -q '^No writable disks'; then
+  if [ "$AUTO" -eq 1 ]; then
+    log "autostart waiting for storage enumeration"
+    exit 75
+  fi
   command -v zenity >/dev/null 2>&1 && zenity --error --width=620 --title="Zorix Installer - no disk" --text="$summary
 
 SATA/AHCI/NVMe drivers were rescanned. Check the VM storage controller and attach a writable virtual disk." || true
