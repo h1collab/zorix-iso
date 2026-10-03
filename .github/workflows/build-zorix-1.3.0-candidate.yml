@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: build-zorix-1.3.0-candidate-${{ github.ref }}
-  cancel-in-progress: true
+  group: build-zorix-1.3.0-candidate-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   build:
