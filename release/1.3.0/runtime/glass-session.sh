@@ -57,9 +57,25 @@ if [ -e /etc/zorix-live ] && command -v zorix-installer >/dev/null 2>&1; then
         echo "Installer autostart skipped: Glass did not report first-paint readiness within 20s." >&2
         exit 76
       fi
-      echo "Glass ready; starting installer autostart." >&2
-      printf 'ZORIX_INSTALLER_AUTOSTART:glass-ready\n' >/dev/ttyS0 2>/dev/null || true
-      sleep 1
+      heartbeat="${XDG_RUNTIME_DIR:-/tmp}/zorix-glass-heartbeat"
+      stable_wait=0
+      stable_beat=0
+      while [ "$stable_wait" -lt 30 ]; do
+        if [ -s "$heartbeat" ]; then
+          stable_beat=$(cat "$heartbeat" 2>/dev/null || echo 0)
+          case "$stable_beat" in ''|*[!0-9]*) stable_beat=0;; esac
+          [ "$stable_beat" -ge 3 ] && break
+        fi
+        sleep 1
+        stable_wait=$((stable_wait+1))
+      done
+      if [ "$stable_beat" -lt 3 ]; then
+        echo "Installer autostart skipped: Glass did not remain stable for three heartbeat samples." >&2
+        exit 77
+      fi
+      echo "ZORIX_INSTALLER_AUTOSTART:stable-glass:$stable_beat" >>"$HOME/.config/zorix/glass.log"
+      echo "Glass stable; starting installer autostart." >&2
+      sleep 2
       attempt=1
       while [ "$attempt" -le 4 ]; do
         /usr/bin/zorix-installer --autostart
@@ -76,7 +92,7 @@ if [ -e /etc/zorix-live ] && command -v zorix-installer >/dev/null 2>&1; then
   fi
 fi
 export CHROME_LOG_FILE="$HOME/.config/zorix/chromium.log"
-rm -f "${XDG_RUNTIME_DIR:-/tmp}/zorix-glass-ready"
+rm -f "${XDG_RUNTIME_DIR:-/tmp}/zorix-glass-ready" "${XDG_RUNTIME_DIR:-/tmp}/zorix-glass-heartbeat"
 python3 /usr/lib/zorix/glass_server.py >>"$HOME/.config/zorix/glass.log" 2>&1
 status=$?
 printf 'ZORIX_GLASS_PROCESS_EXIT:%s\n' "$status" >/dev/ttyS0 2>/dev/null || true
