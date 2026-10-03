@@ -87,7 +87,12 @@ function bootGlass(){
     icons();
     initWindowDrag();
     tick();
-    requestAnimationFrame(()=>requestAnimationFrame(()=>api('ready',{render:renderMode}).catch(e=>reportStartupError('ready',e))));
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      api('ready',{render:renderMode}).then(()=>{
+        let beat=0;
+        setInterval(()=>api('heartbeat',{beat:++beat,render:renderMode}).catch(()=>{}),3000);
+      }).catch(e=>reportStartupError('ready',e));
+    }));
   }catch(e){
     reportStartupError('bootstrap',e);
     document.body.classList.add('bootstrap-failed');
