@@ -72,19 +72,22 @@ bounded 4s udevadm trigger --subsystem-match=block --action=add || true
 udevadm settle --timeout=8 || true
 lsblk -dno NAME,SIZE,TYPE,TRAN,MODEL 2>/dev/null || true
 disk_count=0
+first_disk=
 for dev in /sys/block/sd* /sys/block/vd* /sys/block/nvme*n*; do
   [ -e "$dev/dev" ] || continue
   disk_count=$((disk_count+1))
+  [ -n "$first_disk" ] || first_disk="/dev/${dev##*/}"
 done
 printf 'ZORIX_DISKS:%s\n' "$disk_count" >/dev/ttyS0 2>/dev/null || true
 parted_count=0
-if command -v parted >/dev/null 2>&1; then
-  parted -m -l >/var/log/zorix/parted.log 2>&1 || true
-  while IFS=: read -r dev rest; do
-    case "$dev" in
-      /dev/sd*|/dev/vd*|/dev/nvme*) parted_count=$((parted_count+1)) ;;
-    esac
-  done </var/log/zorix/parted.log
+if [ -n "$first_disk" ] && command -v parted >/dev/null 2>&1; then
+  if bounded 5s parted -m -s "$first_disk" unit B print >/var/log/zorix/parted.log 2>&1; then
+    while IFS=: read -r dev rest; do
+      [ "$dev" = "$first_disk" ] && parted_count=1
+    done </var/log/zorix/parted.log
+  else
+    echo "libparted probe timed out or rejected $first_disk; continuing boot." >>/var/log/zorix/boot.log
+  fi
 fi
 printf 'ZORIX_PARTED_DISKS:%s\n' "$parted_count" >/dev/ttyS0 2>/dev/null || true
 stage 'Starting local services'
