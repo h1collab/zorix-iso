@@ -1,0 +1,108 @@
+name: Capture Zorix 1.3.0 QEMU Screenshot
+
+on:
+  push:
+    paths:
+      - '.github/workflows/capture-zorix-1.3.0-screenshot.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install emulator tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 ovmf socat imagemagick parted curl
+
+      - name: Download and verify published ISO
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 5 \
+            -o ZorixOS-1.3.0-Glass-Installer.iso \
+            https://github.com/h1collab/zorix-iso/releases/download/v1.3.0/ZorixOS-1.3.0-Glass-Installer.iso
+          echo 'c4d25a96a1599c7f2d98e21e58feb4578ea943b9b256f250aba4488c499a4dc3  ZorixOS-1.3.0-Glass-Installer.iso' | sha256sum -c -
+          stat -c 'ISO bytes: %s' ZorixOS-1.3.0-Glass-Installer.iso
+
+      - name: Boot real ISO and capture framebuffer
+        shell: bash
+        run: |
+          set -euo pipefail
+          ISO=ZorixOS-1.3.0-Glass-Installer.iso
+          if [ -f /usr/share/OVMF/OVMF_CODE_4M.fd ] && [ -f /usr/share/OVMF/OVMF_VARS_4M.fd ]; then
+            CODE=/usr/share/OVMF/OVMF_CODE_4M.fd
+            VARS=/usr/share/OVMF/OVMF_VARS_4M.fd
+          else
+            CODE=/usr/share/OVMF/OVMF_CODE.fd
+            VARS=/usr/share/OVMF/OVMF_VARS.fd
+          fi
+          cp "$VARS" OVMF_VARS.fd
+          truncate -s 16G zorix-test-disk.img
+          parted -s zorix-test-disk.img mklabel gpt
+          : > qemu-serial.log
+          rm -f /tmp/zorix-monitor.sock
+
+          qemu-system-x86_64 \
+            -machine q35,accel=tcg -cpu max -smp 2 -m 8192 \
+            -drive if=pflash,format=raw,readonly=on,file="$CODE" \
+            -drive if=pflash,format=raw,file=OVMF_VARS.fd \
+            -drive media=cdrom,format=raw,readonly=on,file="$ISO" \
+            -drive file=zorix-test-disk.img,format=raw,if=none,id=sata0 \
+            -device ide-hd,drive=sata0,bus=ide.1 \
+            -boot order=d,menu=off -vga std -display none \
+            -serial file:qemu-serial.log \
+            -monitor unix:/tmp/zorix-monitor.sock,server,nowait \
+            -no-reboot -no-shutdown &
+          pid=$!
+
+          cleanup() {
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          reached=0
+          for second in $(seq 1 260); do
+            if grep -Fq 'ZORIX_STAGE:Recovery console' qemu-serial.log; then
+              cat qemu-serial.log >&2
+              exit 1
+            fi
+            if grep -Fq 'ZORIX_STAGE:Launching Zorix Glass (' qemu-serial.log; then
+              reached=1
+              break
+            fi
+            kill -0 "$pid" 2>/dev/null || { cat qemu-serial.log >&2; exit 1; }
+            sleep 1
+          done
+          test "$reached" = 1
+          grep -Fq 'ZORIX_DISKS:1' qemu-serial.log
+          grep -Fq 'ZORIX_PARTED_DISKS:1' qemu-serial.log
+
+          mkdir -p captures
+          sleep 10
+          for n in 1 2 3; do
+            printf 'screendump captures/zorix-qemu-%s.ppm\n' "$n" | socat - UNIX-CONNECT:/tmp/zorix-monitor.sock
+            test -s "captures/zorix-qemu-$n.ppm"
+            magick "captures/zorix-qemu-$n.ppm" "captures/zorix-qemu-$n.png" 2>/dev/null || \
+              convert "captures/zorix-qemu-$n.ppm" "captures/zorix-qemu-$n.png"
+            test -s "captures/zorix-qemu-$n.png"
+            sleep 10
+          done
+
+          cp qemu-serial.log captures/qemu-serial.log
+          sha256sum captures/*.png | tee captures/screenshots.sha256
+          echo 'Real QEMU/OVMF screenshots captured from the published Zorix ISO.'
+
+      - name: Upload real QEMU screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: zorix-1.3.0-real-qemu-screenshots
+          path: captures
+          retention-days: 14
+          if-no-files-found: error
