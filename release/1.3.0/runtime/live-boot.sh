@@ -8,6 +8,7 @@ inputpid=
 splash=
 nmpid=
 btpid=
+udisks_pid=
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8
 mkdir -p /run/zorix /run/dbus /run/user/1000 /run/zorix-fonts /run/fontconfig /var/log/zorix /var/lib/dbus /tmp/.X11-unix /etc/modprobe.d
 chmod 1777 /tmp/.X11-unix
@@ -70,10 +71,21 @@ for host in /sys/class/scsi_host/host*; do [ -w "$host/scan" ] && printf '%s\n' 
 bounded 4s udevadm trigger --subsystem-match=block --action=add || true
 udevadm settle --timeout=8 || true
 lsblk -dno NAME,SIZE,TYPE,TRAN,MODEL 2>/dev/null || true
+disk_count=$(lsblk -dn -o TYPE 2>/dev/null | awk '$1=="disk"{n++} END{print n+0}')
+printf 'ZORIX_DISKS:%s\n' "$disk_count" >/dev/ttyS0 2>/dev/null || true
 stage 'Starting local services'
 dbus-uuidgen --ensure=/etc/machine-id || true
 ln -sf /etc/machine-id /var/lib/dbus/machine-id
 bounded 4s dbus-daemon --system --fork || true
+for udisks_bin in /usr/libexec/udisks2/udisksd /usr/lib/udisks2/udisksd; do
+  if [ -x "$udisks_bin" ]; then
+    "$udisks_bin" --no-debug >/var/log/zorix/udisks.log 2>&1 &
+    udisks_pid=$!
+    sleep .3
+    kill -0 "$udisks_pid" 2>/dev/null || udisks_pid=
+    break
+  fi
+done
 bounded 5s fc-cache -f /run/zorix-fonts || true
 stage 'Preparing network'
 ip link set lo up || true
@@ -128,7 +140,7 @@ if [ "$need_input_bridge" -eq 1 ]; then zorix-input >/var/log/zorix/input.log 2>
 stop_splash
 setxkbmap -layout us >/dev/null 2>&1 || true
 command -v xset >/dev/null 2>&1 && xset s off -dpms >/dev/null 2>&1 || true
-cleanup_display(){ stop_pid "$fbpid"; stop_pid "$inputpid"; stop_pid "$xpid"; }
+cleanup_display(){ stop_pid "$fbpid"; stop_pid "$inputpid"; stop_pid "$xpid"; stop_pid "$udisks_pid"; stop_pid "$btpid"; stop_pid "$nmpid"; }
 trap cleanup_display EXIT HUP INT TERM
 stage "Launching Zorix Glass ($mode)"
 env LANG=C.UTF-8 DISPLAY=:0 XAUTHORITY="$XAUTHORITY" XDG_RUNTIME_DIR=/run/user/1000 XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=Zorix XCURSOR_PATH=/usr/share/icons XCURSOR_THEME=ZorixGlass XCURSOR_SIZE=32 ZORIX_RENDER_MODE="$mode" /usr/bin/zorix-run-user dbus-run-session -- /usr/bin/zorix-session-supervisor
