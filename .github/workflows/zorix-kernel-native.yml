@@ -63,6 +63,22 @@ jobs:
           timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -drive format=raw,file=out/esp.img               -display none               -serial file:out/kernel-serial.log               -monitor unix:/tmp/zorix-kernel-monitor.sock,server,nowait               -no-reboot -no-shutdown &
           pid=$!
 
+          # Drive the native Glass pointer pipeline with a real QEMU PS/2 event.
+          (
+            for n in $(seq 1 25); do
+              if grep -Fq 'ZORIX_GLASS_NATIVE:userspace-render-ready' out/kernel-serial.log; then
+                {
+                  printf 'mouse_move -300 -250\n'
+                  printf 'mouse_button 1\n'
+                  printf 'mouse_move 120 70\n'
+                  printf 'mouse_button 0\n'
+                } | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock || true
+                exit 0
+              fi
+              sleep 0.1
+            done
+          ) &
+
           for second in $(seq 1 30); do
             if grep -Fq 'ZORIX_KERNEL_STATUS:desktop-foundation-running' out/kernel-serial.log; then
               grep -Fq 'ZORIX_KERNEL_STAGE:boot-services-exited' out/kernel-serial.log
@@ -86,6 +102,8 @@ jobs:
               grep -Fq 'ZORIX_KERNEL_USER:returned-to-kernel' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_USER:ring3-execution-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_GLASS_NATIVE:userspace-render-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_GLASS_INPUT:focus-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_GLASS_INPUT:window-drag-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:target_hz=144:scheduled=' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:144hz-cadence-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:dirty-rect-present-ok' out/kernel-serial.log
