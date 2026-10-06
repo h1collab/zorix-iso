@@ -60,9 +60,10 @@ jobs:
             VARS=/usr/share/OVMF/OVMF_VARS.fd
           fi
           cp "$VARS" out/OVMF_VARS.fd
+          truncate -s 64M out/nvme.img
           : > out/kernel-serial.log
 
-          timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -drive format=raw,file=out/esp.img               -display none               -serial file:out/kernel-serial.log               -monitor unix:/tmp/zorix-kernel-monitor.sock,server,nowait               -qmp unix:/tmp/zorix-kernel-qmp.sock,server,nowait               -no-reboot -no-shutdown &
+          timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -drive format=raw,file=out/esp.img               -drive if=none,format=raw,file=out/nvme.img,id=nvme0               -device nvme,drive=nvme0,serial=ZORIXNVME               -device qemu-xhci,id=xhci               -device ich9-intel-hda               -device hda-duplex               -netdev user,id=net0               -device virtio-net-pci,netdev=net0               -display none               -serial file:out/kernel-serial.log               -monitor unix:/tmp/zorix-kernel-monitor.sock,server,nowait               -qmp unix:/tmp/zorix-kernel-qmp.sock,server,nowait               -no-reboot -no-shutdown &
           pid=$!
 
           # Drive the native Glass pointer pipeline with a real QEMU PS/2 event.
@@ -93,6 +94,11 @@ jobs:
               grep -Fq 'ZORIX_KERNEL_TIMER:tick_hz=1000:irq0-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:timer-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:pci-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_AHCI:pci-bind-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_NVME:pci-bind-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_XHCI:pci-bind-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_NET:pci-bind-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_AUDIO:pci-bind-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_SCHED:fair-queue-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_SYSCALL:native-abi-dispatch-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_ELF:elf64-validate-ok' out/kernel-serial.log
