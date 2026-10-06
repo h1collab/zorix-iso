@@ -112,9 +112,22 @@ zk_ltr:
     ltr %ax
     ret
 
+.data
+.align 8
+.globl zk_kernel_resume_rsp
+zk_kernel_resume_rsp:
+    .quad 0
+.globl zk_kernel_resume_rip
+zk_kernel_resume_rip:
+    .quad 0
+
+.text
 .globl zk_enter_user
 zk_enter_user:
     /* Windows x64 ABI: rcx=entry, rdx=user_rsp */
+    movq %rsp, zk_kernel_resume_rsp(%rip)
+    leaq .Luser_resume(%rip), %rax
+    movq %rax, zk_kernel_resume_rip(%rip)
     pushq $0x23
     pushq %rdx
     pushfq
@@ -122,10 +135,14 @@ zk_enter_user:
     pushq $0x1b
     pushq %rcx
     iretq
+.Luser_resume:
+    ret
 
 .extern zk_syscall_int80_dispatch
 .globl zk_int80
 zk_int80:
+    cmpq $3, %rax
+    je .Luser_exit
     pushq %rcx
     pushq %rdx
     pushq %r8
@@ -139,3 +156,7 @@ zk_int80:
     popq %rdx
     popq %rcx
     iretq
+
+.Luser_exit:
+    movq zk_kernel_resume_rsp(%rip), %rsp
+    jmp *zk_kernel_resume_rip(%rip)
