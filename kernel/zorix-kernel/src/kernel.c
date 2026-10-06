@@ -271,6 +271,10 @@ static volatile U32 g_pointer_buttons;
 static volatile U32 g_current_pid=42U;
 static U8 g_mouse_packet[3];
 static U32 g_mouse_packet_pos;
+static U8 g_key_queue[64];
+static U32 g_key_read;
+static U32 g_key_write;
+static U32 g_key_count;
 
 static U32 g_pci_ahci;
 static U32 g_pci_nvme;
@@ -881,17 +885,28 @@ static void ps2_mouse_init(void) {
     g_pointer_y=(g_gop&&g_gop->mode&&g_gop->mode->info)?g_gop->mode->info->height/2U:384U;
     g_pointer_buttons=0U;
     g_mouse_packet_pos=0U;
+    g_key_read=0U; g_key_write=0U; g_key_count=0U;
 
     if(defaults_ok&&stream_ok) serial("ZORIX_KERNEL_INPUT:ps2-pointer-ready\n");
     else serial("ZORIX_KERNEL_INPUT:ps2-pointer-degraded\n");
 }
 
+static void keyboard_push(U8 code) {
+    if(g_key_count>=64U) return;
+    g_key_queue[g_key_write]=code;
+    g_key_write=(g_key_write+1U)%64U;
+    g_key_count++;
+}
+
 static void ps2_mouse_poll(void) {
-    for (U32 samples=0;samples<12U;++samples) {
+    for (U32 samples=0;samples<24U;++samples) {
         U8 status=zk_in8(0x64U);
         if ((status&0x01U)==0U) break;
         U8 data=zk_in8(0x60U);
-        if ((status&0x20U)==0U) continue;
+        if ((status&0x20U)==0U) {
+            keyboard_push(data);
+            continue;
+        }
 
         if (g_mouse_packet_pos==0U && (data&0x08U)==0U) continue;
         g_mouse_packet[g_mouse_packet_pos++]=data;
@@ -920,6 +935,15 @@ static void ps2_mouse_poll(void) {
 static U64 pointer_snapshot(void) {
     ps2_mouse_poll();
     return ((U64)g_pointer_x<<32)|((U64)g_pointer_y<<8)|(U64)(g_pointer_buttons&0xffU);
+}
+
+static U64 keyboard_snapshot(void) {
+    ps2_mouse_poll();
+    if(!g_key_count) return 0U;
+    U8 code=g_key_queue[g_key_read];
+    g_key_read=(g_key_read+1U)%64U;
+    g_key_count--;
+    return (U64)code;
 }
 
 typedef enum {
@@ -1203,6 +1227,11 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
         if (arg0==1U) serial("ZORIX_APP_SETTINGS:ring3-ready\n");
         else if (arg0==2U) serial("ZORIX_APP_FILES:ring3-ready\n");
         else serial("ZORIX_KERNEL_ERROR:native-app-start\n");
+        return 1U;
+    }
+    if (nr == 17U) return keyboard_snapshot();
+    if (nr == 18U) {
+        serial("ZORIX_GLASS_INPUT:keyboard-ok\n");
         return 1U;
     }
     return ~0ULL;
