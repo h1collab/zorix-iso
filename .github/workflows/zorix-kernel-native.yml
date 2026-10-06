@@ -1,0 +1,94 @@
+name: Zorix Kernel Native Boot
+
+on:
+  push:
+    paths:
+      - 'kernel/zorix-kernel/**'
+      - '.github/workflows/zorix-kernel-native.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zorix-kernel-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-boot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain and QEMU
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang lld qemu-system-x86 ovmf
+
+      - name: Build independent Zorix Kernel EFI image
+        run: |
+          set -euxo pipefail
+          mkdir -p out
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -fshort-wchar -mno-red-zone             -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/kernel.c -o out/kernel.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -mno-red-zone -c             kernel/zorix-kernel/src/ports.S -o out/ports.obj
+          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj
+          test -s out/ZORIXKERNEL.EFI
+          sha256sum out/ZORIXKERNEL.EFI
+
+      - name: Create EFI system disk
+        run: |
+          set -euxo pipefail
+          truncate -s 64M out/esp.img
+          mkfs.vfat out/esp.img
+          mmd -i out/esp.img ::EFI
+          mmd -i out/esp.img ::EFI/BOOT
+          mcopy -i out/esp.img out/ZORIXKERNEL.EFI ::EFI/BOOT/BOOTX64.EFI
+
+      - name: Boot Zorix Kernel in QEMU OVMF
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq dosfstools mtools
+          if [ -f /usr/share/OVMF/OVMF_CODE_4M.fd ] && [ -f /usr/share/OVMF/OVMF_VARS_4M.fd ]; then
+            CODE=/usr/share/OVMF/OVMF_CODE_4M.fd
+            VARS=/usr/share/OVMF/OVMF_VARS_4M.fd
+          else
+            CODE=/usr/share/OVMF/OVMF_CODE.fd
+            VARS=/usr/share/OVMF/OVMF_VARS.fd
+          fi
+          cp "$VARS" out/OVMF_VARS.fd
+          : > out/kernel-serial.log
+
+          timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -drive format=raw,file=out/esp.img               -display none               -serial file:out/kernel-serial.log               -monitor none               -no-reboot -no-shutdown &
+          pid=$!
+
+          for second in $(seq 1 30); do
+            if grep -Fq 'ZORIX_KERNEL_STAGE:kernel-main' out/kernel-serial.log; then
+              grep -Fq 'ZORIX_KERNEL_STAGE:boot-services-exited' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_STATUS:native-kernel-running' out/kernel-serial.log
+              cat out/kernel-serial.log
+              kill "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
+              exit 0
+            fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+
+          cat out/kernel-serial.log >&2
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          echo 'Zorix Kernel did not reach kernel_main.' >&2
+          exit 1
+
+      - name: Upload kernel prototype
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zorix-kernel-native
+          path: |
+            out/ZORIXKERNEL.EFI
+            out/kernel-serial.log
+          if-no-files-found: warn
+          retention-days: 14
