@@ -119,7 +119,9 @@ jobs:
               grep -Fq 'ZORIX_RUNTIME_ELF:segment-load-bss-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_RUNTIME_PROCESS:multi-app-table-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_APP_SETTINGS:ring3-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_APP_SETTINGS:ui-rendered' out/kernel-serial.log
               grep -Fq 'ZORIX_APP_FILES:ring3-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_APP_FILES:ui-rendered' out/kernel-serial.log
               grep -Fq 'ZORIX_RUNTIME_PROCESS:multi-ring3-launch-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_RUNTIME_DRIVERS:registry-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_LINUX_ABI:syscall-subset-ok' out/kernel-serial.log
