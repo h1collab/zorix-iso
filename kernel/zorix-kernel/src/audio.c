@@ -45,7 +45,7 @@ void zk_audio_mix(ZK_AUDIO_FRAME*dst,const ZK_AUDIO_FRAME*src,U32 frames,U32 gai
 }
 
 U32 zk_audio_selftest(void){
-    ZK_AUDIO_QUEUE q;zk_audio_init(&q,48000U);
+    static ZK_AUDIO_QUEUE q;zk_audio_init(&q,48000U);
     ZK_AUDIO_FRAME a[4]={{1000,-1000},{2000,-2000},{3000,-3000},{32000,32000}};
     ZK_AUDIO_FRAME b[4]={{500,500},{500,500},{500,500},{2000,2000}};
     zk_audio_mix(a,b,4U,256U);
