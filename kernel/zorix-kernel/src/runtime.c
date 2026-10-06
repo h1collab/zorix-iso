@@ -222,6 +222,57 @@ ZK_PROCESS *zk_process_spawn(ZK_PROCESS_TABLE *pt,const char *name,U64 entry,U64
     return p;
 }
 
+static ZK_RAMFS g_desktop_fs;
+static U8 g_desktop_storage[5][256];
+static U32 g_desktop_fs_ready;
+
+void zk_runtime_desktop_fs_init(void) {
+    if(g_desktop_fs_ready) return;
+    zk_ramfs_init(&g_desktop_fs);
+
+    static const char *names[5]={
+        "README.TXT","SYSTEM.LOG","GLASS.CFG","APPS.LIST","WELCOME.TXT"
+    };
+    static const char *content[5]={
+        "ZORIX NATIVE DESKTOP READY",
+        "KERNEL 0.5 NATIVE RING3",
+        "GLASS 144 HZ LIQUID MODE",
+        "SETTINGS FILES TERMINAL",
+        "WELCOME TO ZORIX"
+    };
+
+    for(U32 i=0;i<5U;++i){
+        ZK_RAMFS_FILE *f=zk_ramfs_create(&g_desktop_fs,names[i],g_desktop_storage[i],sizeof(g_desktop_storage[i]),0644U);
+        if(!f) continue;
+        U32 n=0U; while(content[i][n]&&n<255U) ++n;
+        (void)zk_ramfs_write(f,content[i],n);
+    }
+    g_desktop_fs_ready=1U;
+}
+
+U32 zk_runtime_file_count(void) {
+    zk_runtime_desktop_fs_init();
+    return g_desktop_fs.count;
+}
+
+const char *zk_runtime_file_name(U32 index) {
+    zk_runtime_desktop_fs_init();
+    if(index>=g_desktop_fs.count) return (const char*)0;
+    return g_desktop_fs.files[index].name;
+}
+
+U32 zk_runtime_file_size(U32 index) {
+    zk_runtime_desktop_fs_init();
+    if(index>=g_desktop_fs.count) return 0U;
+    return g_desktop_fs.files[index].size;
+}
+
+const char *zk_runtime_file_data(U32 index) {
+    zk_runtime_desktop_fs_init();
+    if(index>=g_desktop_fs.count) return (const char*)0;
+    return (const char*)g_desktop_fs.files[index].data;
+}
+
 void zk_driver_registry_init(ZK_DRIVER_REGISTRY *r) {
     memzero(r,sizeof(*r));
 }
