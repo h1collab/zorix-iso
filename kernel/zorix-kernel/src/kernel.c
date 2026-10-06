@@ -220,6 +220,10 @@ extern void zk_enter_user(void *entry, void *user_rsp);
 extern void zk_int80(void);
 extern U8 zk_user_blob_start[];
 extern U8 zk_user_blob_end[];
+extern U8 zk_settings_blob_start[];
+extern U8 zk_settings_blob_end[];
+extern U8 zk_files_blob_start[];
+extern U8 zk_files_blob_end[];
 extern U32 zk_runtime_selftest(void);
 
 volatile U64 zk_breakpoint_hits = 0;
@@ -247,6 +251,8 @@ static TSS64 g_tss;
 static U8 *g_kernel_stack;
 static U8 *g_user_allocation;
 static U8 *g_user_region;
+static U8 *g_user_region_settings;
+static U8 *g_user_region_files;
 static U8 *g_pt_arena;
 static UN g_pt_arena_used;
 static volatile U32 g_user_probe_ok;
@@ -255,6 +261,7 @@ static volatile U32 g_user_probe_fail;
 static volatile U32 g_pointer_x;
 static volatile U32 g_pointer_y;
 static volatile U32 g_pointer_buttons;
+static volatile U32 g_current_pid=42U;
 static U8 g_mouse_packet[3];
 static U32 g_mouse_packet_pos;
 
@@ -445,12 +452,14 @@ static STATUS prepare_heap_and_backbuffer(void) {
 
 static STATUS prepare_user_region(void) {
     U64 raw=0;
-    STATUS s=g_bs->allocpages(0U,2U,1024U,&raw);
+    STATUS s=g_bs->allocpages(0U,2U,2048U,&raw);
     if(FAILED(s)||!raw) return s;
     g_user_allocation=(U8*)(UN)raw;
     U64 aligned=(raw+0x1fffffULL)&~0x1fffffULL;
-    if(aligned+0x200000ULL>raw+0x400000ULL) return EFI_ERROR_BIT|9ULL;
+    if(aligned+0x600000ULL>raw+0x800000ULL) return EFI_ERROR_BIT|9ULL;
     g_user_region=(U8*)(UN)aligned;
+    g_user_region_settings=g_user_region+0x200000U;
+    g_user_region_files=g_user_region+0x400000U;
 
     U64 pt_raw=0;
     s=g_bs->allocpages(0U,2U,64U,&pt_raw);
@@ -716,16 +725,20 @@ static U32 build_zorix_page_tables(U64 user_base) {
         serial("\n");
     }
 
-    /* Replace the user's 2 MiB kernel mapping with 4 KiB user mappings. */
-    U64 *pd=ensure_pd(pml4,user_base,1U);
-    if(!pd) return 0U;
-    U32 pd_i=(U32)((user_base>>21)&0x1ffULL);
-    U64 *pt=pt_page();
-    if(!pt) return 0U;
-    pd[pd_i]=(U64)(UN)pt|0x007ULL;
-    for(U32 i=0;i<512U;++i){
-        U64 phys=user_base+((U64)i<<12);
-        pt[i]=phys|0x007ULL;
+    /* Replace three 2 MiB kernel mappings with 4 KiB user mappings:
+     * Glass shell, Settings and Files. */
+    for(U32 region=0;region<3U;++region){
+        U64 base=user_base+(U64)region*0x200000ULL;
+        U64 *pd=ensure_pd(pml4,base,1U);
+        if(!pd) return 0U;
+        U32 pd_i=(U32)((base>>21)&0x1ffULL);
+        U64 *pt=pt_page();
+        if(!pt) return 0U;
+        pd[pd_i]=(U64)(UN)pt|0x007ULL;
+        for(U32 i=0;i<512U;++i){
+            U64 phys=base+((U64)i<<12);
+            pt[i]=phys|0x007ULL;
+        }
     }
 
     zk_write_cr3((U64)(UN)pml4);
@@ -1095,7 +1108,7 @@ static U32 pipe_roundtrip_user(void) {
 }
 
 __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1, U64 arg2) {
-    if (nr == 0U) return 42U;
+    if (nr == 0U) return g_current_pid;
     if (nr == 1U) return 0x00050000ULL;
     if (nr == 2U) return zk_timer_ticks;
     if (nr == 3U) return 0U;
@@ -1151,6 +1164,12 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
         else if (arg0==3U) serial("ZORIX_GLASS_INPUT:pointer-event-ok\n");
         return 1U;
     }
+    if (nr == 16U) {
+        if (arg0==1U) serial("ZORIX_APP_SETTINGS:ring3-ready\n");
+        else if (arg0==2U) serial("ZORIX_APP_FILES:ring3-ready\n");
+        else serial("ZORIX_KERNEL_ERROR:native-app-start\n");
+        return 1U;
+    }
     return ~0ULL;
 }
 
@@ -1187,6 +1206,37 @@ static void ring3_userspace_probe(void) {
     } else {
         serial("ZORIX_KERNEL_ERROR:ring3-user-return-state\n");
     }
+}
+
+static U32 copy_user_blob(U8 *dst,U8 *start,U8 *end) {
+    UN size=(UN)(end-start);
+    if(!dst||size==0U||size>4096U) return 0U;
+    for(UN i=0;i<size;++i) dst[i]=start[i];
+    return 1U;
+}
+
+static void launch_native_apps(void) {
+    if(!copy_user_blob(g_user_region_settings,zk_settings_blob_start,zk_settings_blob_end)) {
+        serial("ZORIX_KERNEL_ERROR:settings-image\n");
+        return;
+    }
+    if(!copy_user_blob(g_user_region_files,zk_files_blob_start,zk_files_blob_end)) {
+        serial("ZORIX_KERNEL_ERROR:files-image\n");
+        return;
+    }
+
+    g_current_pid=100U;
+    serial("ZORIX_PROCESS:launch:pid=100:settings\n");
+    zk_enter_user((void*)g_user_region_settings,(void*)(g_user_region_settings+0x200000U-16U));
+    serial("ZORIX_PROCESS:exit:pid=100:settings\n");
+
+    g_current_pid=101U;
+    serial("ZORIX_PROCESS:launch:pid=101:files\n");
+    zk_enter_user((void*)g_user_region_files,(void*)(g_user_region_files+0x200000U-16U));
+    serial("ZORIX_PROCESS:exit:pid=101:files\n");
+
+    g_current_pid=42U;
+    serial("ZORIX_RUNTIME_PROCESS:multi-ring3-launch-ok\n");
 }
 
 static void userspace_foundation_selftest(void) {
@@ -1233,6 +1283,7 @@ static void kernel_main(void) {
     userspace_foundation_selftest();
     serial("ZORIX_KERNEL_STAGE:ring3-probe-start\n");
     ring3_userspace_probe();
+    launch_native_apps();
 
     compositor_selftest();
     serial("ZORIX_KERNEL_STAGE:compositor-ready\n");
