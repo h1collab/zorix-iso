@@ -228,6 +228,10 @@ extern U32 zk_runtime_selftest(void);
 extern U32 zk_linux_abi_selftest(void);
 extern U32 zk_installer_selftest(void);
 extern U32 zk_driver_core_selftest(void);
+extern U32 zk_zfs_selftest(void);
+extern U32 zk_net_selftest(void);
+extern U32 zk_audio_selftest(void);
+extern U32 zk_wireless_selftest(void);
 
 volatile U64 zk_breakpoint_hits = 0;
 volatile U64 zk_timer_ticks = 0;
@@ -1308,6 +1312,22 @@ static void userspace_foundation_selftest(void) {
     if(drv&32U) serial("ZORIX_DRIVER_WIFI:frame-path-ok\n");
     if(drv&64U) serial("ZORIX_DRIVER_BLUETOOTH:hci-path-ok\n");
     if(drv!=127U) serial("ZORIX_KERNEL_ERROR:driver-command-path\n");
+
+    if(zk_zfs_selftest()) serial("ZORIX_FS:format-mount-read-write-ok\n");
+    else serial("ZORIX_KERNEL_ERROR:zorixfs\n");
+
+    U32 net=zk_net_selftest();
+    if(net==3U) serial("ZORIX_NET:arp-ipv4-udp-ok\n");
+    else serial("ZORIX_KERNEL_ERROR:network-stack\n");
+
+    if(zk_audio_selftest()) serial("ZORIX_AUDIO:48khz-mixer-ring-ok\n");
+    else serial("ZORIX_KERNEL_ERROR:audio-engine\n");
+
+    U32 wireless=zk_wireless_selftest();
+    if(wireless==7U) {
+        serial("ZORIX_WIFI:80211-parser-ok\n");
+        serial("ZORIX_BLUETOOTH:hci-state-ok\n");
+    } else serial("ZORIX_KERNEL_ERROR:wireless-core\n");
 
     serial("ZORIX_KERNEL_STAGE:userspace-foundation-ready\n");
 }
