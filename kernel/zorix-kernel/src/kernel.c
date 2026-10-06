@@ -233,6 +233,11 @@ extern U32 zk_net_selftest(void);
 extern U32 zk_audio_selftest(void);
 extern U32 zk_wireless_selftest(void);
 
+extern void zr_gradient(U32*,U32,U32,U32,U32,U32,U32,U32,U32,U32,U32);
+extern void zr_round(U32*,U32,U32,U32,U32,U32,U32,U32,U32,U32,U8,U32);
+extern void zr_glass(U32*,U32,U32,U32,U32,U32,U32,U32,U32,U32,U8,U32,U32,U8);
+extern void zr_text(U32*,U32,U32,U32,U32,const char*,U32,U32,U32,U32);
+
 volatile U64 zk_breakpoint_hits = 0;
 volatile U64 zk_timer_ticks = 0;
 
@@ -282,6 +287,7 @@ static U32 g_pci_xhci;
 static U32 g_pci_net;
 static U32 g_pci_audio;
 static U32 g_pci_wifi;
+static U32 g_glass_render_features;
 
 static void uefi_print(CHAR16 *s) {
     if (g_st && g_st->out && g_st->out->print) g_st->out->print(g_st->out, s);
@@ -1233,6 +1239,51 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
     if (nr == 18U) {
         serial("ZORIX_GLASS_INPUT:keyboard-ok\n");
         return 1U;
+    }
+    if (nr == 19U) {
+        if (!g_gop || !g_gop->mode || !g_gop->mode->info) return 0U;
+        GOPINFO *i=g_gop->mode->info;
+        U32 x0=(U32)(arg0>>32),y0=(U32)arg0,x1=(U32)(arg1>>32),y1=(U32)arg1;
+        zr_gradient(g_backbuffer,i->stride,i->width,i->height,i->format,x0,y0,x1,y1,(U32)(arg2&0xffffffULL),(U32)((arg2>>24)&0xffffffULL));
+        g_glass_render_features|=1U;
+        return 1U;
+    }
+    if (nr == 20U) {
+        if (!g_gop || !g_gop->mode || !g_gop->mode->info) return 0U;
+        GOPINFO *i=g_gop->mode->info;
+        U32 x0=(U32)(arg0>>32),y0=(U32)arg0,x1=(U32)(arg1>>32),y1=(U32)arg1;
+        zr_glass(g_backbuffer,i->stride,i->width,i->height,i->format,x0,y0,x1,y1,
+                 (U32)(arg2&0xffffffULL),(U8)((arg2>>24)&0xffULL),(U32)((arg2>>32)&0xffULL),
+                 (U32)((arg2>>40)&0xffULL),(U8)((arg2>>48)&0xffULL));
+        g_glass_render_features|=2U;
+        return 1U;
+    }
+    if (nr == 21U) {
+        if (!g_gop || !g_gop->mode || !g_gop->mode->info) return 0U;
+        GOPINFO *i=g_gop->mode->info;
+        U32 x0=(U32)(arg0>>32),y0=(U32)arg0,x1=(U32)(arg1>>32),y1=(U32)arg1;
+        zr_round(g_backbuffer,i->stride,i->width,i->height,i->format,x0,y0,x1,y1,
+                 (U32)(arg2&0xffffffULL),(U8)((arg2>>24)&0xffULL),(U32)((arg2>>32)&0xffULL));
+        g_glass_render_features|=4U;
+        return 1U;
+    }
+    if (nr == 22U) {
+        if (!g_gop || !g_gop->mode || !g_gop->mode->info) return 0U;
+        GOPINFO *i=g_gop->mode->info;
+        U64 p=arg0,base=(U64)(UN)g_user_region;
+        if(!g_user_region || p<base || p>=base+0x200000ULL) return 0U;
+        zr_text(g_backbuffer,i->stride,i->width,i->height,i->format,(const char*)(UN)p,
+                (U32)(arg1>>32),(U32)arg1,(U32)(arg2&0xffffffULL),(U32)((arg2>>24)&0xffULL));
+        g_glass_render_features|=8U;
+        return 1U;
+    }
+    if (nr == 23U) {
+        if((g_glass_render_features&15U)==15U){
+            serial("ZORIX_GLASS_RENDER:liquid-glass-ok\n");
+            return 1U;
+        }
+        serial("ZORIX_KERNEL_ERROR:liquid-glass-features\n");
+        return 0U;
     }
     return ~0ULL;
 }
