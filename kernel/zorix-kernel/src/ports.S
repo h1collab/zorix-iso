@@ -90,8 +90,12 @@ zk_isr3:
 .extern zk_timer_ticks
 .globl zk_irq0
 zk_irq0:
+    pushq %rax
+    pushq %rdx
     incq zk_timer_ticks(%rip)
     movb $0x20, %al
     movw $0x20, %dx
     outb %al, %dx
+    popq %rdx
+    popq %rax
     iretq
