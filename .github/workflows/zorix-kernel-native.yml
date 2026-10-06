@@ -67,13 +67,18 @@ jobs:
               grep -Fq 'ZORIX_KERNEL_STAGE:boot-services-exited' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_MEMORY:heap-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_IDT:breakpoint-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_PAGING:cr3=' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_TIMER:tick_hz=1000:irq0-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_STAGE:timer-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:pci-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_RENDER:target_hz=144:frames=144' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_RENDER:144hz-cadence-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:dirty-rect-present-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:compositor-ready' out/kernel-serial.log
-              printf 'screendump out/zorix-kernel-0.2.ppm\n' | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock
-              test -s out/zorix-kernel-0.2.ppm
-              magick out/zorix-kernel-0.2.ppm out/zorix-kernel-0.2.png 2>/dev/null || convert out/zorix-kernel-0.2.ppm out/zorix-kernel-0.2.png
-              colors="$(identify -format '%k' out/zorix-kernel-0.2.png)"
+              printf 'screendump out/zorix-kernel-0.3.ppm\n' | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock
+              test -s out/zorix-kernel-0.3.ppm
+              magick out/zorix-kernel-0.3.ppm out/zorix-kernel-0.3.png 2>/dev/null || convert out/zorix-kernel-0.3.ppm out/zorix-kernel-0.3.png
+              colors="$(identify -format '%k' out/zorix-kernel-0.3.png)"
               echo "Zorix Kernel framebuffer unique colors: $colors"
               test "$colors" -ge 8
               cat out/kernel-serial.log
@@ -99,6 +104,6 @@ jobs:
           path: |
             out/ZORIXKERNEL.EFI
             out/kernel-serial.log
-            out/zorix-kernel-0.2.png
+            out/zorix-kernel-0.3.png
           if-no-files-found: warn
           retention-days: 14
