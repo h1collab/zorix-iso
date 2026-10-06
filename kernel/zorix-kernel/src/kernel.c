@@ -477,7 +477,7 @@ static STATUS prepare_user_region(void) {
     g_user_region=(U8*)(UN)aligned;
 
     U64 pt_raw=0;
-    s=g_bs->allocpages(0U,2U,16U,&pt_raw);
+    s=g_bs->allocpages(0U,2U,64U,&pt_raw);
     if(FAILED(s)||!pt_raw||(pt_raw&0xfffULL)) return FAILED(s)?s:(EFI_ERROR_BIT|9ULL);
     g_pt_arena=(U8*)(UN)pt_raw;
     g_pt_arena_used=0;
@@ -676,35 +676,74 @@ static void paging_report(void) {
 }
 
 static U64 *pt_page(void) {
-    if (!g_pt_arena || g_pt_arena_used + 4096U > 16U * 4096U) return NULL;
+    if (!g_pt_arena || g_pt_arena_used + 4096U > 64U * 4096U) return NULL;
     U64 *p = (U64*)(void*)(g_pt_arena + g_pt_arena_used);
     g_pt_arena_used += 4096U;
     for (U32 i=0;i<512U;++i) p[i]=0;
     return p;
 }
 
-static U32 build_zorix_page_tables(U64 user_base) {
-    if ((user_base & 0x1fffffULL) != 0ULL) return 0U;
-    if (user_base >= 0x100000000ULL) return 0U;
+static U64 *ensure_pd(U64 *pml4, U64 va, U8 user) {
+    U32 i4=(U32)((va>>39)&0x1ffULL);
+    U32 i3=(U32)((va>>30)&0x1ffULL);
 
-    U64 *pml4=pt_page();
-    U64 *pdpt=pt_page();
-    if(!pml4||!pdpt) return 0U;
-    pml4[0]=(U64)(UN)pdpt|0x003ULL;
-
-    for(U32 gi=0;gi<4U;++gi){
-        U64 *pd=pt_page();
-        if(!pd) return 0U;
-        pdpt[gi]=(U64)(UN)pd|0x003ULL;
-        for(U32 i=0;i<512U;++i){
-            U64 phys=((U64)gi<<30)|((U64)i<<21);
-            pd[i]=phys|0x083ULL;
-        }
+    U64 *pdpt;
+    if(!(pml4[i4]&1ULL)){
+        pdpt=pt_page();
+        if(!pdpt) return NULL;
+        pml4[i4]=(U64)(UN)pdpt|0x003ULL|(user?0x004ULL:0ULL);
+    } else {
+        pdpt=(U64*)(UN)(pml4[i4]&~0xfffULL);
+        if(user) pml4[i4]|=0x004ULL;
     }
 
-    U32 pdpt_i=(U32)((user_base>>30)&0x3ULL);
+    U64 *pd;
+    if(!(pdpt[i3]&1ULL)){
+        pd=pt_page();
+        if(!pd) return NULL;
+        pdpt[i3]=(U64)(UN)pd|0x003ULL|(user?0x004ULL:0ULL);
+    } else {
+        pd=(U64*)(UN)(pdpt[i3]&~0xfffULL);
+        if(user) pdpt[i3]|=0x004ULL;
+    }
+    return pd;
+}
+
+static U32 map_supervisor_2m(U64 *pml4,U64 start,U64 bytes){
+    U64 first=start&~0x1fffffULL;
+    U64 end=(start+bytes+0x1fffffULL)&~0x1fffffULL;
+    for(U64 va=first;va<end;va+=0x200000ULL){
+        U64 *pd=ensure_pd(pml4,va,0U);
+        if(!pd) return 0U;
+        U32 i2=(U32)((va>>21)&0x1ffULL);
+        pd[i2]=(va&~0x1fffffULL)|0x083ULL;
+    }
+    return 1U;
+}
+
+static U32 build_zorix_page_tables(U64 user_base) {
+    if ((user_base & 0x1fffffULL) != 0ULL) return 0U;
+
+    U64 *pml4=pt_page();
+    if(!pml4) return 0U;
+
+    /* Identity-map the first 4 GiB supervisor-only for kernel code/data/MMIO. */
+    if(!map_supervisor_2m(pml4,0,0x100000000ULL)) return 0U;
+
+    /* Map GOP framebuffer wherever firmware placed the BAR. */
+    if(g_gop && g_gop->mode && g_gop->mode->fb && g_gop->mode->fbsize){
+        if(!map_supervisor_2m(pml4,g_gop->mode->fb,(U64)g_gop->mode->fbsize)) return 0U;
+        serial("ZORIX_KERNEL_PAGING:framebuffer=");
+        serial_hex64(g_gop->mode->fb);
+        serial(":bytes=");
+        serial_hex64((U64)g_gop->mode->fbsize);
+        serial("\n");
+    }
+
+    /* Replace the user's 2 MiB kernel mapping with 4 KiB user mappings. */
+    U64 *pd=ensure_pd(pml4,user_base,1U);
+    if(!pd) return 0U;
     U32 pd_i=(U32)((user_base>>21)&0x1ffULL);
-    U64 *pd=(U64*)(UN)(pdpt[pdpt_i]&~0xfffULL);
     U64 *pt=pt_page();
     if(!pt) return 0U;
     pd[pd_i]=(U64)(UN)pt|0x007ULL;
@@ -712,8 +751,6 @@ static U32 build_zorix_page_tables(U64 user_base) {
         U64 phys=user_base+((U64)i<<12);
         pt[i]=phys|0x007ULL;
     }
-    pdpt[pdpt_i]|=0x004ULL;
-    pml4[0]|=0x004ULL;
 
     zk_write_cr3((U64)(UN)pml4);
     serial("ZORIX_KERNEL_PAGING:zorix-cr3=");
