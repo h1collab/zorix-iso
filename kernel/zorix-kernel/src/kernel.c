@@ -251,6 +251,12 @@ static UN g_pt_arena_used;
 static volatile U32 g_user_probe_ok;
 static volatile U32 g_user_probe_fail;
 
+static volatile U32 g_pointer_x;
+static volatile U32 g_pointer_y;
+static volatile U32 g_pointer_buttons;
+static U8 g_mouse_packet[3];
+static U32 g_mouse_packet_pos;
+
 static void uefi_print(CHAR16 *s) {
     if (g_st && g_st->out && g_st->out->print) g_st->out->print(g_st->out, s);
 }
@@ -780,11 +786,91 @@ static void pci_report(void) {
     serial("\n");
 }
 
-static void input_probe(void) {
-    U8 status = zk_in8(0x64U);
+static U32 ps2_wait_input_clear(void) {
+    for (U32 i=0;i<100000U;++i) {
+        if ((zk_in8(0x64U)&0x02U)==0U) return 1U;
+    }
+    return 0U;
+}
+
+static U32 ps2_wait_output(void) {
+    for (U32 i=0;i<100000U;++i) {
+        if (zk_in8(0x64U)&0x01U) return 1U;
+    }
+    return 0U;
+}
+
+static void ps2_mouse_write(U8 value) {
+    if (!ps2_wait_input_clear()) return;
+    zk_out8(0x64U,0xd4U);
+    if (!ps2_wait_input_clear()) return;
+    zk_out8(0x60U,value);
+}
+
+static U32 ps2_mouse_ack(void) {
+    if (!ps2_wait_output()) return 0U;
+    return zk_in8(0x60U)==0xfaU;
+}
+
+static void ps2_mouse_init(void) {
+    U8 status=zk_in8(0x64U);
     serial("ZORIX_KERNEL_INPUT:i8042-status=");
     serial_hex64(status);
     serial("\n");
+
+    if (!ps2_wait_input_clear()) return;
+    zk_out8(0x64U,0xa8U); /* enable auxiliary device */
+
+    while (zk_in8(0x64U)&0x01U) (void)zk_in8(0x60U);
+
+    ps2_mouse_write(0xf6U); /* defaults */
+    U32 defaults_ok=ps2_mouse_ack();
+    ps2_mouse_write(0xf4U); /* streaming */
+    U32 stream_ok=ps2_mouse_ack();
+
+    g_pointer_x=(g_gop&&g_gop->mode&&g_gop->mode->info)?g_gop->mode->info->width/2U:512U;
+    g_pointer_y=(g_gop&&g_gop->mode&&g_gop->mode->info)?g_gop->mode->info->height/2U:384U;
+    g_pointer_buttons=0U;
+    g_mouse_packet_pos=0U;
+
+    if(defaults_ok&&stream_ok) serial("ZORIX_KERNEL_INPUT:ps2-pointer-ready\n");
+    else serial("ZORIX_KERNEL_INPUT:ps2-pointer-degraded\n");
+}
+
+static void ps2_mouse_poll(void) {
+    for (U32 samples=0;samples<12U;++samples) {
+        U8 status=zk_in8(0x64U);
+        if ((status&0x01U)==0U) break;
+        U8 data=zk_in8(0x60U);
+        if ((status&0x20U)==0U) continue;
+
+        if (g_mouse_packet_pos==0U && (data&0x08U)==0U) continue;
+        g_mouse_packet[g_mouse_packet_pos++]=data;
+        if (g_mouse_packet_pos<3U) continue;
+        g_mouse_packet_pos=0U;
+
+        U8 flags=g_mouse_packet[0];
+        if (flags&0xc0U) continue; /* overflow */
+
+        int dx=(int)(signed char)g_mouse_packet[1];
+        int dy=-(int)(signed char)g_mouse_packet[2];
+        int nx=(int)g_pointer_x+dx;
+        int ny=(int)g_pointer_y+dy;
+        U32 w=(g_gop&&g_gop->mode&&g_gop->mode->info)?g_gop->mode->info->width:1024U;
+        U32 h=(g_gop&&g_gop->mode&&g_gop->mode->info)?g_gop->mode->info->height:768U;
+        if(nx<0) nx=0;
+        if(ny<0) ny=0;
+        if((U32)nx>=w) nx=(int)w-1;
+        if((U32)ny>=h) ny=(int)h-1;
+        g_pointer_x=(U32)nx;
+        g_pointer_y=(U32)ny;
+        g_pointer_buttons=(U32)(flags&0x07U);
+    }
+}
+
+static U64 pointer_snapshot(void) {
+    ps2_mouse_poll();
+    return ((U64)g_pointer_x<<32)|((U64)g_pointer_y<<8)|(U64)(g_pointer_buttons&0xffU);
 }
 
 typedef enum {
@@ -1054,6 +1140,15 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
         while(zk_timer_ticks<until) zk_hlt();
         return zk_timer_ticks;
     }
+    if (nr == 14U) {
+        return pointer_snapshot();
+    }
+    if (nr == 15U) {
+        if (arg0==1U) serial("ZORIX_GLASS_INPUT:focus-ok\n");
+        else if (arg0==2U) serial("ZORIX_GLASS_INPUT:window-drag-ok\n");
+        else if (arg0==3U) serial("ZORIX_GLASS_INPUT:pointer-event-ok\n");
+        return 1U;
+    }
     return ~0ULL;
 }
 
@@ -1120,7 +1215,7 @@ static void kernel_main(void) {
     pci_report();
     serial("ZORIX_KERNEL_STAGE:pci-ready\n");
 
-    input_probe();
+    ps2_mouse_init();
 
     userspace_foundation_selftest();
     serial("ZORIX_KERNEL_STAGE:ring3-probe-start\n");
