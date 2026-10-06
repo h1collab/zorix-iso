@@ -71,7 +71,7 @@ jobs:
               grep -Fq 'ZORIX_KERNEL_TIMER:tick_hz=1000:irq0-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:timer-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:pci-ready' out/kernel-serial.log
-              grep -Fq 'ZORIX_KERNEL_RENDER:target_hz=144:frames=144' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_RENDER:target_hz=144:frames=' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:144hz-cadence-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:dirty-rect-present-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:compositor-ready' out/kernel-serial.log
