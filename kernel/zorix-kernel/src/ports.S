@@ -99,3 +99,43 @@ zk_irq0:
     popq %rdx
     popq %rax
     iretq
+
+
+.globl zk_lgdt
+zk_lgdt:
+    lgdt (%rcx)
+    ret
+
+.globl zk_ltr
+zk_ltr:
+    movw %cx, %ax
+    ltr %ax
+    ret
+
+.globl zk_enter_user
+zk_enter_user:
+    /* Windows x64 ABI: rcx=entry, rdx=user_rsp */
+    pushq $0x23
+    pushq %rdx
+    pushfq
+    orq $0x200, (%rsp)
+    pushq $0x1b
+    pushq %rcx
+    iretq
+
+.extern zk_syscall_int80_dispatch
+.globl zk_int80
+zk_int80:
+    pushq %rcx
+    pushq %rdx
+    pushq %r8
+    pushq %r9
+    subq $32, %rsp
+    movq %rax, %rcx
+    call zk_syscall_int80_dispatch
+    addq $32, %rsp
+    popq %r9
+    popq %r8
+    popq %rdx
+    popq %rcx
+    iretq
