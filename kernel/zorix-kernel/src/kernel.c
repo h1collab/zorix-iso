@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MIT
- * Zorix Kernel 0.4
+ * Zorix Kernel 0.5
  *
  * Independent x86-64 desktop-foundation kernel.
  * No Linux kernel code is included or loaded.
@@ -1408,7 +1408,7 @@ STATUS EFIAPI efi_main(HANDLE image, ST *system) {
 
     if (!g_bs) return EFI_ERROR_BIT | 2ULL;
 
-    uefi_print(L"\r\nZorix Kernel 0.4 - ring3 userspace foundation\r\n");
+    uefi_print(L"\r\nZorix Kernel 0.5 - native desktop integration\r\n");
     uefi_print(L"Independent native kernel; no Linux kernel is loaded.\r\n");
 
     STATUS s = g_bs->locate(&gop_guid, NULL, (void**)&g_gop);
