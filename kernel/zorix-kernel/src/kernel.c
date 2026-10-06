@@ -1290,7 +1290,7 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
 
 static void ring3_userspace_probe(void) {
     UN blob_size = (UN)(zk_user_blob_end - zk_user_blob_start);
-    if (blob_size == 0U || blob_size > 4096U) {
+    if (blob_size == 0U || blob_size > 65536U) {
         serial("ZORIX_KERNEL_ERROR:user-blob-size\n");
         return;
     }
