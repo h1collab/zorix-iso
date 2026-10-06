@@ -1286,6 +1286,8 @@ static void userspace_foundation_selftest(void) {
     else serial("ZORIX_KERNEL_ERROR:ramfs-runtime\n");
     if(runtime&2U) serial("ZORIX_RUNTIME_ELF:program-loader-ok\n");
     else serial("ZORIX_KERNEL_ERROR:elf-runtime\n");
+    if(runtime&16U) serial("ZORIX_RUNTIME_ELF:segment-load-bss-ok\n");
+    else serial("ZORIX_KERNEL_ERROR:elf-segment-load\n");
     if(runtime&4U) serial("ZORIX_RUNTIME_PROCESS:multi-app-table-ok\n");
     else serial("ZORIX_KERNEL_ERROR:process-runtime\n");
     if(runtime&8U) serial("ZORIX_RUNTIME_DRIVERS:registry-ok\n");
