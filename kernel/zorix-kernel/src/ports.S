@@ -32,6 +32,11 @@ zk_cli:
     cli
     ret
 
+.globl zk_sti
+zk_sti:
+    sti
+    ret
+
 .globl zk_hlt
 zk_hlt:
     hlt
@@ -47,6 +52,11 @@ zk_rdtsc:
     rdtsc
     shlq $32, %rdx
     orq %rdx, %rax
+    ret
+
+.globl zk_read_cr3
+zk_read_cr3:
+    movq %cr3, %rax
     ret
 
 .globl zk_read_cs
@@ -74,4 +84,14 @@ zk_test_breakpoint:
 .globl zk_isr3
 zk_isr3:
     incq zk_breakpoint_hits(%rip)
+    iretq
+
+
+.extern zk_timer_ticks
+.globl zk_irq0
+zk_irq0:
+    incq zk_timer_ticks(%rip)
+    movb $0x20, %al
+    movw $0x20, %dx
+    outb %al, %dx
     iretq
