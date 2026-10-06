@@ -85,6 +85,7 @@ jobs:
               grep -Fq 'ZORIX_KERNEL_USER:cpl3-syscall-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_USER:returned-to-kernel' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_USER:ring3-execution-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_GLASS_NATIVE:userspace-render-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:target_hz=144:scheduled=' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:144hz-cadence-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:dirty-rect-present-ok' out/kernel-serial.log
