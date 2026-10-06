@@ -652,6 +652,41 @@ static void paging_report(void) {
     serial(":active\n");
 }
 
+static U32 mark_user_page(U64 va) {
+    U64 *pml4 = (U64*)(UN)(zk_read_cr3() & ~0xfffULL);
+    U32 i4 = (U32)((va >> 39) & 0x1ffULL);
+    U32 i3 = (U32)((va >> 30) & 0x1ffULL);
+    U32 i2 = (U32)((va >> 21) & 0x1ffULL);
+    U32 i1 = (U32)((va >> 12) & 0x1ffULL);
+
+    if (!(pml4[i4] & 1ULL)) return 0U;
+    pml4[i4] |= 4ULL;
+    U64 *pdpt = (U64*)(UN)(pml4[i4] & ~0xfffULL);
+
+    if (!(pdpt[i3] & 1ULL)) return 0U;
+    pdpt[i3] |= 4ULL;
+    if (pdpt[i3] & (1ULL << 7)) return 1U;
+    U64 *pd = (U64*)(UN)(pdpt[i3] & ~0xfffULL);
+
+    if (!(pd[i2] & 1ULL)) return 0U;
+    pd[i2] |= 4ULL;
+    if (pd[i2] & (1ULL << 7)) return 1U;
+    U64 *pt = (U64*)(UN)(pd[i2] & ~0xfffULL);
+
+    if (!(pt[i1] & 1ULL)) return 0U;
+    pt[i1] |= 4ULL;
+    return 1U;
+}
+
+static U32 mark_user_region(void *base, UN bytes) {
+    U64 start = (U64)(UN)base & ~0xfffULL;
+    U64 end = ((U64)(UN)base + bytes + 0xfffULL) & ~0xfffULL;
+    for (U64 va = start; va < end; va += 0x1000ULL) {
+        if (!mark_user_page(va)) return 0U;
+    }
+    return 1U;
+}
+
 static U32 pci_read32(U8 bus, U8 dev, U8 fn, U8 reg) {
     U32 address = 0x80000000U |
                   ((U32)bus << 16) |
@@ -935,10 +970,7 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr) {
     if (nr == 0U) return 42U;
     if (nr == 1U) return 0x00040000ULL;
     if (nr == 2U) return zk_timer_ticks;
-    if (nr == 3U) {
-        serial("ZORIX_KERNEL_USER:exit-request\n");
-        for (;;) zk_hlt();
-    }
+    if (nr == 3U) return 0U;
     if (nr == 4U) {
         g_user_probe_ok = 1U;
         serial("ZORIX_KERNEL_USER:cpl3-syscall-ok\n");
@@ -970,6 +1002,12 @@ static void ring3_userspace_probe(void) {
 
     for (UN i = 0; i < blob_size; ++i) g_user_region[i] = zk_user_blob_start[i];
 
+    if (!mark_user_region(g_user_region, 2U * 1024U * 1024U)) {
+        serial("ZORIX_KERNEL_ERROR:user-page-map\n");
+        return;
+    }
+    serial("ZORIX_KERNEL_PAGING:user-pages-enabled\n");
+
     U8 *user_stack_top = g_user_region + (2U * 1024U * 1024U) - 16U;
     g_user_probe_ok = 0U;
     g_user_probe_fail = 0U;
@@ -977,8 +1015,12 @@ static void ring3_userspace_probe(void) {
     serial("ZORIX_KERNEL_USER:enter-cpl3\n");
     zk_enter_user((void*)g_user_region, (void*)user_stack_top);
 
-    /* zk_enter_user returns only if the user entry faults before iret. */
-    serial("ZORIX_KERNEL_ERROR:ring3-returned-unexpectedly\n");
+    if (g_user_probe_ok && !g_user_probe_fail) {
+        serial("ZORIX_KERNEL_USER:returned-to-kernel\n");
+        serial("ZORIX_KERNEL_USER:ring3-execution-ok\n");
+    } else {
+        serial("ZORIX_KERNEL_ERROR:ring3-user-return-state\n");
+    }
 }
 
 static void userspace_foundation_selftest(void) {
