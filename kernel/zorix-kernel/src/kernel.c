@@ -1382,7 +1382,7 @@ static void ring3_userspace_probe(void) {
 
 static U32 copy_user_blob(U8 *dst,U8 *start,U8 *end) {
     UN size=(UN)(end-start);
-    if(!dst||size==0U||size>4096U) return 0U;
+    if(!dst||size==0U||size>65536U) return 0U;
     for(UN i=0;i<size;++i) dst[i]=start[i];
     return 1U;
 }
