@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: zorix-kernel-native-${{ github.ref }}
+  group: zorix-kernel-native-v03-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
