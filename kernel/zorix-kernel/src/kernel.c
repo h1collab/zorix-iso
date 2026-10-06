@@ -1331,6 +1331,17 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
         serial("ZORIX_APP_FILES:ui-rendered\n");
         return 1U;
     }
+    /* Files app: draw content preview for a live RAMFS file. */
+    if (nr == 29U) {
+        if (!g_gop || !g_gop->mode || !g_gop->mode->info) return 0U;
+        U32 idx=(U32)arg0;
+        const char *data=zk_runtime_file_data(idx);
+        if(!data) return 0U;
+        GOPINFO *i=g_gop->mode->info;
+        zr_text(g_backbuffer,i->stride,i->width,i->height,i->format,data,
+                (U32)(arg1>>32),(U32)arg1,(U32)(arg2&0xffffffULL),(U32)((arg2>>24)&0xffULL));
+        return zk_runtime_file_size(idx);
+    }
     return ~0ULL;
 }
 
