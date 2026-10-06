@@ -42,7 +42,8 @@ jobs:
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/net_stack.c -o out/net_stack.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/audio.c -o out/audio.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/wireless.c -o out/wireless.obj
-          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj out/apps.obj out/runtime.obj out/linux_abi.obj out/installer.obj out/driver_core.obj out/zorixfs.obj out/net_stack.obj out/audio.obj out/wireless.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/glass_render.c -o out/glass_render.obj
+          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj out/apps.obj out/runtime.obj out/linux_abi.obj out/installer.obj out/driver_core.obj out/zorixfs.obj out/net_stack.obj out/audio.obj out/wireless.obj out/glass_render.obj
           test -s out/ZORIXKERNEL.EFI
           sha256sum out/ZORIXKERNEL.EFI
 
@@ -144,6 +145,7 @@ jobs:
               grep -Fq 'ZORIX_KERNEL_USER:returned-to-kernel' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_USER:ring3-execution-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_GLASS_NATIVE:userspace-render-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_GLASS_RENDER:liquid-glass-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_GLASS_INPUT:focus-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_GLASS_INPUT:window-drag-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_GLASS_INPUT:keyboard-ok' out/kernel-serial.log
@@ -156,7 +158,7 @@ jobs:
               magick out/zorix-kernel-0.4.ppm out/zorix-kernel-0.4.png 2>/dev/null || convert out/zorix-kernel-0.4.ppm out/zorix-kernel-0.4.png
               colors="$(identify -format '%k' out/zorix-kernel-0.4.png)"
               echo "Zorix Kernel framebuffer unique colors: $colors"
-              test "$colors" -ge 8
+              test "$colors" -ge 128
               cat out/kernel-serial.log
               kill "$pid" 2>/dev/null || true
               wait "$pid" 2>/dev/null || true
