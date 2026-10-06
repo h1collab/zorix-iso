@@ -71,6 +71,13 @@ jobs:
               grep -Fq 'ZORIX_KERNEL_TIMER:tick_hz=1000:irq0-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:timer-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:pci-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_SCHED:fair-queue-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_SYSCALL:native-abi-dispatch-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_ELF:elf64-validate-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_VFS:metadata-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_PIPE:ring-buffer-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_FUTEX:wait-wake-state-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_STAGE:userspace-foundation-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:target_hz=144:frames=' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:144hz-cadence-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:dirty-rect-present-ok' out/kernel-serial.log
