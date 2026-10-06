@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: zorix-kernel-native-v03-${{ github.ref }}
+  group: zorix-kernel-native-v04-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -32,7 +32,8 @@ jobs:
           mkdir -p out
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fshort-wchar -mno-red-zone             -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/kernel.c -o out/kernel.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -mno-red-zone -c             kernel/zorix-kernel/src/ports.S -o out/ports.obj
-          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -mno-red-zone -c             kernel/zorix-kernel/src/user.S -o out/user.obj
+          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj
           test -s out/ZORIXKERNEL.EFI
           sha256sum out/ZORIXKERNEL.EFI
 
@@ -78,14 +79,20 @@ jobs:
               grep -Fq 'ZORIX_KERNEL_PIPE:ring-buffer-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_FUTEX:wait-wake-state-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:userspace-foundation-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_GDT:tss-ring3-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_PAGING:user-pages-enabled' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_USER:enter-cpl3' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_USER:cpl3-syscall-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_USER:returned-to-kernel' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_USER:ring3-execution-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:target_hz=144:scheduled=' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:144hz-cadence-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:dirty-rect-present-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:compositor-ready' out/kernel-serial.log
-              printf 'screendump out/zorix-kernel-0.3.ppm\n' | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock
-              test -s out/zorix-kernel-0.3.ppm
-              magick out/zorix-kernel-0.3.ppm out/zorix-kernel-0.3.png 2>/dev/null || convert out/zorix-kernel-0.3.ppm out/zorix-kernel-0.3.png
-              colors="$(identify -format '%k' out/zorix-kernel-0.3.png)"
+              printf 'screendump out/zorix-kernel-0.4.ppm\n' | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock
+              test -s out/zorix-kernel-0.4.ppm
+              magick out/zorix-kernel-0.4.ppm out/zorix-kernel-0.4.png 2>/dev/null || convert out/zorix-kernel-0.4.ppm out/zorix-kernel-0.4.png
+              colors="$(identify -format '%k' out/zorix-kernel-0.4.png)"
               echo "Zorix Kernel framebuffer unique colors: $colors"
               test "$colors" -ge 8
               cat out/kernel-serial.log
@@ -111,6 +118,6 @@ jobs:
           path: |
             out/ZORIXKERNEL.EFI
             out/kernel-serial.log
-            out/zorix-kernel-0.3.png
+            out/zorix-kernel-0.4.png
           if-no-files-found: warn
           retention-days: 14
