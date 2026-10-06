@@ -232,6 +232,11 @@ extern U32 zk_zfs_selftest(void);
 extern U32 zk_net_selftest(void);
 extern U32 zk_audio_selftest(void);
 extern U32 zk_wireless_selftest(void);
+extern void zk_runtime_desktop_fs_init(void);
+extern U32 zk_runtime_file_count(void);
+extern const char *zk_runtime_file_name(U32 index);
+extern U32 zk_runtime_file_size(U32 index);
+extern const char *zk_runtime_file_data(U32 index);
 
 extern void zr_gradient(U32*,U32,U32,U32,U32,U32,U32,U32,U32,U32,U32);
 extern void zr_round(U32*,U32,U32,U32,U32,U32,U32,U32,U32,U32,U8,U32);
@@ -1172,6 +1177,15 @@ static U32 pipe_roundtrip_user(void) {
     return 1U;
 }
 
+static U32 user_ptr_ok_for_current_process(U64 p) {
+    U64 base=0ULL;
+    if(g_current_pid==42U) base=(U64)(UN)g_user_region;
+    else if(g_current_pid==100U) base=(U64)(UN)g_user_region_settings;
+    else if(g_current_pid==101U) base=(U64)(UN)g_user_region_files;
+    if(!base) return 0U;
+    return p>=base && p<base+0x200000ULL;
+}
+
 __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1, U64 arg2) {
     if (nr == 0U) return g_current_pid;
     if (nr == 1U) return 0x00050000ULL;
@@ -1270,8 +1284,8 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
     if (nr == 22U) {
         if (!g_gop || !g_gop->mode || !g_gop->mode->info) return 0U;
         GOPINFO *i=g_gop->mode->info;
-        U64 p=arg0,base=(U64)(UN)g_user_region;
-        if(!g_user_region || p<base || p>=base+0x200000ULL) return 0U;
+        U64 p=arg0;
+        if(!user_ptr_ok_for_current_process(p)) return 0U;
         zr_text(g_backbuffer,i->stride,i->width,i->height,i->format,(const char*)(UN)p,
                 (U32)(arg1>>32),(U32)arg1,(U32)(arg2&0xffffffULL),(U32)((arg2>>24)&0xffULL));
         g_glass_render_features|=8U;
@@ -1284,6 +1298,38 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
         }
         serial("ZORIX_KERNEL_ERROR:liquid-glass-features\n");
         return 0U;
+    }
+    /* Native Settings system snapshot. */
+    if (nr == 24U) {
+        U32 flags=0U;
+        if(g_pci_nvme) flags|=1U;
+        if(g_pci_xhci) flags|=2U;
+        if(g_pci_net) flags|=4U;
+        if(g_pci_audio) flags|=8U;
+        return ((U64)COMPOSITOR_HZ<<32)|(U64)flags;
+    }
+    /* Files app: enumerate live RAMFS. */
+    if (nr == 25U) {
+        return zk_runtime_file_count();
+    }
+    /* Draw one real RAMFS file entry. arg0=index, arg1=x/y, arg2=color/scale. */
+    if (nr == 26U) {
+        if (!g_gop || !g_gop->mode || !g_gop->mode->info) return 0U;
+        U32 idx=(U32)arg0;
+        const char *name=zk_runtime_file_name(idx);
+        if(!name) return 0U;
+        GOPINFO *i=g_gop->mode->info;
+        zr_text(g_backbuffer,i->stride,i->width,i->height,i->format,name,
+                (U32)(arg1>>32),(U32)arg1,(U32)(arg2&0xffffffULL),(U32)((arg2>>24)&0xffULL));
+        return zk_runtime_file_size(idx);
+    }
+    if (nr == 27U) {
+        serial("ZORIX_APP_SETTINGS:ui-rendered\n");
+        return 1U;
+    }
+    if (nr == 28U) {
+        serial("ZORIX_APP_FILES:ui-rendered\n");
+        return 1U;
     }
     return ~0ULL;
 }
@@ -1436,6 +1482,7 @@ static void kernel_main(void) {
     ps2_mouse_init();
 
     userspace_foundation_selftest();
+    zk_runtime_desktop_fs_init();
     serial("ZORIX_KERNEL_STAGE:ring3-probe-start\n");
     ring3_userspace_probe();
     launch_native_apps();
