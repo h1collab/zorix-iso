@@ -1,66 +1,67 @@
-# Zorix Kernel 0.3
+# Zorix Kernel 0.5
 
 Zorix Kernel is the independent native-kernel track for Zorix OS.
 
-## 0.3 highlights
+0.5 is the first integrated native-desktop milestone. The kernel is not a
+Linux fork and boots directly from UEFI.
 
-- independent x86-64 kernel, not a Linux fork
-- UEFI handoff and retained memory-map inspection
-- 32 MiB bootstrap heap
-- IDT exception self-test
-- active paging state reporting
-- 1000 Hz IRQ-driven kernel timer
-- 144 Hz compositor cadence target
-- double buffering and dirty-rectangle present
-- direct PCI enumeration
-- i8042 input probe
-- fair-queue scheduler foundation
-- native Zorix syscall dispatcher
-- ELF64 executable validation
-- VFS metadata foundation
-- pipe ring-buffer IPC
-- futex wait/wake state foundation
-- QEMU/OVMF framebuffer validation
+## Verified in QEMU/OVMF
 
-## Smoothness target
+- UEFI handoff and ExitBootServices
+- Zorix GDT/TSS/IDT
+- independent CR3/page tables
+- CPL3 userspace and int 0x80 native syscall ABI
+- 1000 Hz timer
+- 144 Hz compositor scheduling target
+- native Glass userspace shell
+- PS/2 pointer events
+- window focus and drag
+- PS/2 keyboard event queue
+- Settings and Files launched as separate ring-3 programs
+- RAMFS primitives
+- PT_LOAD ELF64 segment copying and BSS zeroing
+- ZorixFS format/mount/create/write/read
+- AHCI/NVMe/xHCI/network/audio PCI class binding in QEMU
+- AHCI/NVMe/xHCI/HDA/network command builders
+- Ethernet/ARP/IPv4/UDP protocol core
+- 48 kHz stereo audio ring/mixer
+- Wi-Fi 802.11 parser foundation
+- Bluetooth HCI command/event foundation
+- Linux syscall-translation subset
+- native GPT/ESP/root installer layout planner
 
-The 0.3 timing model uses:
+## Important limits
 
-- 1000 Hz kernel/input/scheduler timing
-- 144 Hz desktop compositor target
-- dirty rectangles instead of mandatory full-screen redraw
-- double buffering
-- no busy-wait compositor loop
-- bounded refresh work
+0.5 does **not** mean every item above is a production-complete hardware stack.
 
-A higher numerical frame target is not automatically smoother. The next
-graphics work should add adaptive 60/90/120/144/165 Hz output selection based
-on real display capabilities and measured render cost.
+The following are foundations, not yet complete end-to-end implementations:
 
-## Still required before current desktop apps can run
+- AHCI/NVMe DMA data transfer and filesystem mounting from a physical disk
+- xHCI controller initialization, USB enumeration and USB HID
+- real NIC RX/TX descriptor rings, DHCP/DNS/TCP and socket API
+- hardware Wi-Fi firmware/radio drivers and association
+- Bluetooth USB transport, discovery, pairing and profiles
+- HDA DMA playback/capture and mixer device routing
+- preemptive multi-process context switching and per-process CR3 isolation
+- full Linux ABI required by glibc, Chromium and arbitrary third-party apps
+- writing a complete installed system to a blank physical disk
+- native replacement for all Calamares UI/workflows
+- full migration of every legacy Glass feature and every desktop application
 
-- real preemptive context switching
-- ring-3 execution
-- independent page tables per process
-- physical page allocator and VM mappings
-- complete ELF program-header mapping
-- syscall entry from user mode
-- signals, threads, TLS and blocking futex queues
-- VFS mounts and real filesystems
-- sockets, epoll/poll, PTYs
-- AHCI/NVMe drivers
-- USB xHCI/HID
-- Ethernet/Wi-Fi
-- audio
-- Bluetooth
-- native service manager
-- graphics/input/audio userspace APIs
-- selected Linux ABI compatibility
+The public Zorix ISO must remain on the current Linux-backed release path until
+the native installer, storage, USB, network and hardware matrix are complete.
 
-The public Zorix desktop must remain on its validated Linux kernel until these
-items are actually implemented and the Glass desktop boots on Zorix Kernel.
+## Performance architecture
 
-## CI success markers
+- 1000 Hz kernel timer
+- 144 Hz compositor scheduling target
+- dirty-rectangle presentation
+- event-driven redraw
+- double-buffered framebuffer
+- no mandatory full-screen blur on software rendering
+- bounded queues and non-blocking UI design
 
-The native boot CI requires timer, paging, scheduler, syscall, ELF, VFS, pipe,
-futex and 144 Hz compositor selftests plus a nonblank framebuffer capture.
+## CI
+
+The native boot workflow validates all current milestones in QEMU/OVMF and
+injects pointer and keyboard input before accepting the build.
