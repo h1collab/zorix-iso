@@ -265,6 +265,13 @@ static volatile U32 g_current_pid=42U;
 static U8 g_mouse_packet[3];
 static U32 g_mouse_packet_pos;
 
+static U32 g_pci_ahci;
+static U32 g_pci_nvme;
+static U32 g_pci_xhci;
+static U32 g_pci_net;
+static U32 g_pci_audio;
+static U32 g_pci_wifi;
+
 static void uefi_print(CHAR16 *s) {
     if (g_st && g_st->out && g_st->out->print) g_st->out->print(g_st->out, s);
 }
@@ -765,15 +772,29 @@ static void pci_count_fn(U8 bus, U8 dev, U8 fn, PCI_STATS *s) {
     U32 class_reg = pci_read32(bus,dev,fn,0x08U);
     U8 class_code = (U8)(class_reg >> 24);
     U8 subclass = (U8)(class_reg >> 16);
-    if (class_code == 0x01U) ++s->storage;
-    else if (class_code == 0x02U) ++s->network;
-    else if (class_code == 0x03U) ++s->display;
-    else if (class_code == 0x04U) ++s->multimedia;
-    else if (class_code == 0x06U) ++s->bridges;
-    else if (class_code == 0x0cU && subclass == 0x03U) ++s->usb;
+    U8 prog_if = (U8)(class_reg >> 8);
+    if (class_code == 0x01U) {
+        ++s->storage;
+        if (subclass==0x06U && prog_if==0x01U) ++g_pci_ahci;
+        if (subclass==0x08U && prog_if==0x02U) ++g_pci_nvme;
+    } else if (class_code == 0x02U) {
+        ++s->network;
+        ++g_pci_net;
+        if (subclass==0x80U) ++g_pci_wifi;
+    } else if (class_code == 0x03U) ++s->display;
+    else if (class_code == 0x04U) {
+        ++s->multimedia;
+        if (subclass==0x03U || subclass==0x01U) ++g_pci_audio;
+    } else if (class_code == 0x06U) ++s->bridges;
+    else if (class_code == 0x0cU && subclass == 0x03U) {
+        ++s->usb;
+        if (prog_if==0x30U) ++g_pci_xhci;
+    }
 }
 
 static PCI_STATS pci_scan(void) {
+    g_pci_ahci=0U; g_pci_nvme=0U; g_pci_xhci=0U;
+    g_pci_net=0U; g_pci_audio=0U; g_pci_wifi=0U;
     PCI_STATS s = {0,0,0,0,0,0,0};
     for (U32 bus = 0; bus < 256U; ++bus) {
         for (U32 dev = 0; dev < 32U; ++dev) {
@@ -798,6 +819,13 @@ static void pci_report(void) {
     serial(":usb="); serial_u32(s.usb);
     serial(":bridges="); serial_u32(s.bridges);
     serial("\n");
+
+    if(g_pci_ahci) serial("ZORIX_DRIVER_AHCI:pci-bind-ok\n");
+    if(g_pci_nvme) serial("ZORIX_DRIVER_NVME:pci-bind-ok\n");
+    if(g_pci_xhci) serial("ZORIX_DRIVER_XHCI:pci-bind-ok\n");
+    if(g_pci_net) serial("ZORIX_DRIVER_NET:pci-bind-ok\n");
+    if(g_pci_audio) serial("ZORIX_DRIVER_AUDIO:pci-bind-ok\n");
+    if(g_pci_wifi) serial("ZORIX_DRIVER_WIFI:pci-bind-ok\n");
 }
 
 static U32 ps2_wait_input_clear(void) {
