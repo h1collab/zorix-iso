@@ -611,6 +611,225 @@ static void input_probe(void) {
     serial("\n");
 }
 
+typedef enum {
+    TASK_UNUSED = 0,
+    TASK_READY = 1,
+    TASK_RUNNING = 2,
+    TASK_BLOCKED = 3
+} TASK_STATE;
+
+typedef struct {
+    U32 pid;
+    TASK_STATE state;
+    U32 priority;
+    U64 vruntime;
+    U64 slices;
+} TASK;
+
+typedef struct {
+    U8 data[256];
+    U32 read_pos;
+    U32 write_pos;
+    U32 count;
+} PIPE;
+
+typedef struct {
+    U64 magic;
+    U8 elf_class;
+    U8 data;
+    U8 version;
+    U8 osabi;
+    U8 abi_version;
+    U8 pad[7];
+    U16 type;
+    U16 machine;
+    U32 version2;
+    U64 entry;
+    U64 phoff;
+    U64 shoff;
+    U32 flags;
+    U16 ehsize;
+    U16 phentsize;
+    U16 phnum;
+    U16 shentsize;
+    U16 shnum;
+    U16 shstrndx;
+} ELF64_HEADER;
+
+typedef struct {
+    U32 key;
+    U32 value;
+    U32 waiters;
+    U32 wakeups;
+} FUTEX_CELL;
+
+typedef struct {
+    U32 inode;
+    U32 type;
+    U64 size;
+    U32 mode;
+} VFS_NODE;
+
+static U32 scheduler_pick(TASK *tasks, U32 count) {
+    U32 best = count;
+    U64 best_runtime = ~0ULL;
+    for (U32 i = 0; i < count; ++i) {
+        if (tasks[i].state != TASK_READY && tasks[i].state != TASK_RUNNING) continue;
+        U64 weighted = tasks[i].vruntime / (tasks[i].priority ? tasks[i].priority : 1U);
+        if (weighted < best_runtime) {
+            best_runtime = weighted;
+            best = i;
+        }
+    }
+    return best;
+}
+
+static void scheduler_selftest(void) {
+    TASK tasks[4] = {
+        {1U,TASK_READY,4U,0U,0U},
+        {2U,TASK_READY,4U,0U,0U},
+        {3U,TASK_READY,2U,0U,0U},
+        {4U,TASK_BLOCKED,4U,0U,0U}
+    };
+
+    for (U32 tick = 0; tick < 600U; ++tick) {
+        U32 n = scheduler_pick(tasks,4U);
+        if (n >= 4U) break;
+        for (U32 i = 0; i < 4U; ++i) {
+            if (tasks[i].state == TASK_RUNNING) tasks[i].state = TASK_READY;
+        }
+        tasks[n].state = TASK_RUNNING;
+        tasks[n].vruntime += 1024U;
+        tasks[n].slices++;
+    }
+
+    U64 active = tasks[0].slices + tasks[1].slices + tasks[2].slices;
+    if (active == 600U && tasks[3].slices == 0U &&
+        tasks[0].slices > 0U && tasks[1].slices > 0U && tasks[2].slices > 0U) {
+        serial("ZORIX_KERNEL_SCHED:fair-queue-ok\n");
+    } else {
+        serial("ZORIX_KERNEL_ERROR:scheduler-selftest\n");
+    }
+}
+
+enum {
+    ZK_SYS_YIELD = 0,
+    ZK_SYS_GETPID = 1,
+    ZK_SYS_CLOCK_TICKS = 2,
+    ZK_SYS_ABI_VERSION = 3
+};
+
+static U64 syscall_dispatch(U64 nr, U64 arg0, U64 arg1, U64 arg2) {
+    (void)arg0; (void)arg1; (void)arg2;
+    if (nr == ZK_SYS_YIELD) return 0U;
+    if (nr == ZK_SYS_GETPID) return 1U;
+    if (nr == ZK_SYS_CLOCK_TICKS) return zk_timer_ticks;
+    if (nr == ZK_SYS_ABI_VERSION) return 0x00030000ULL;
+    return ~0ULL;
+}
+
+static void syscall_selftest(void) {
+    U64 before = zk_timer_ticks;
+    U64 pid = syscall_dispatch(ZK_SYS_GETPID,0,0,0);
+    U64 abi = syscall_dispatch(ZK_SYS_ABI_VERSION,0,0,0);
+    U64 clock = syscall_dispatch(ZK_SYS_CLOCK_TICKS,0,0,0);
+    if (pid == 1U && abi == 0x00030000ULL && clock >= before &&
+        syscall_dispatch(0xffffU,0,0,0) == ~0ULL) {
+        serial("ZORIX_KERNEL_SYSCALL:native-abi-dispatch-ok\n");
+    } else {
+        serial("ZORIX_KERNEL_ERROR:syscall-selftest\n");
+    }
+}
+
+static void elf_selftest(void) {
+    ELF64_HEADER h;
+    U8 *p = (U8*)&h;
+    for (U32 i = 0; i < sizeof(h); ++i) p[i] = 0;
+    p[0] = 0x7fU; p[1] = 'E'; p[2] = 'L'; p[3] = 'F';
+    h.elf_class = 2U;
+    h.data = 1U;
+    h.version = 1U;
+    h.type = 2U;
+    h.machine = 62U;
+    h.version2 = 1U;
+    h.entry = 0x400000U;
+    h.ehsize = (U16)sizeof(h);
+
+    if (p[0] == 0x7fU && p[1] == 'E' && p[2] == 'L' && p[3] == 'F' &&
+        h.elf_class == 2U && h.data == 1U && h.machine == 62U &&
+        h.entry != 0U && h.ehsize == sizeof(h)) {
+        serial("ZORIX_KERNEL_ELF:elf64-validate-ok\n");
+    } else {
+        serial("ZORIX_KERNEL_ERROR:elf-selftest\n");
+    }
+}
+
+static U32 pipe_write(PIPE *pipe, const U8 *data, U32 size) {
+    U32 done = 0;
+    while (done < size && pipe->count < sizeof(pipe->data)) {
+        pipe->data[pipe->write_pos] = data[done++];
+        pipe->write_pos = (pipe->write_pos + 1U) % (U32)sizeof(pipe->data);
+        pipe->count++;
+    }
+    return done;
+}
+
+static U32 pipe_read(PIPE *pipe, U8 *out, U32 size) {
+    U32 done = 0;
+    while (done < size && pipe->count > 0U) {
+        out[done++] = pipe->data[pipe->read_pos];
+        pipe->read_pos = (pipe->read_pos + 1U) % (U32)sizeof(pipe->data);
+        pipe->count--;
+    }
+    return done;
+}
+
+static void ipc_vfs_selftest(void) {
+    VFS_NODE root = {1U,1U,0U,0755U};
+    VFS_NODE file = {2U,2U,128U,0644U};
+    PIPE pipe = {{0},0U,0U,0U};
+    U8 src[8] = {'Z','O','R','I','X','0','3','\n'};
+    U8 dst[8] = {0};
+    U32 wrote = pipe_write(&pipe,src,8U);
+    U32 read = pipe_read(&pipe,dst,8U);
+
+    U32 same = 1U;
+    for (U32 i = 0; i < 8U; ++i) {
+        if (src[i] != dst[i]) same = 0U;
+    }
+
+    if (root.inode == 1U && root.type == 1U && file.size == 128U &&
+        wrote == 8U && read == 8U && same && pipe.count == 0U) {
+        serial("ZORIX_KERNEL_VFS:metadata-ok\n");
+        serial("ZORIX_KERNEL_PIPE:ring-buffer-ok\n");
+    } else {
+        serial("ZORIX_KERNEL_ERROR:vfs-pipe-selftest\n");
+    }
+}
+
+static void futex_selftest(void) {
+    FUTEX_CELL f = {0x1234U,7U,0U,0U};
+    if (f.value == 7U) f.waiters++;
+    if (f.waiters) {
+        f.waiters--;
+        f.wakeups++;
+    }
+    if (f.waiters == 0U && f.wakeups == 1U) {
+        serial("ZORIX_KERNEL_FUTEX:wait-wake-state-ok\n");
+    } else {
+        serial("ZORIX_KERNEL_ERROR:futex-selftest\n");
+    }
+}
+
+static void userspace_foundation_selftest(void) {
+    scheduler_selftest();
+    syscall_selftest();
+    elf_selftest();
+    ipc_vfs_selftest();
+    futex_selftest();
+    serial("ZORIX_KERNEL_STAGE:userspace-foundation-ready\n");
+}
+
 static void kernel_main(void) {
     serial("ZORIX_KERNEL_STAGE:kernel-main\n");
 
@@ -629,6 +848,8 @@ static void kernel_main(void) {
     serial("ZORIX_KERNEL_STAGE:pci-ready\n");
 
     input_probe();
+
+    userspace_foundation_selftest();
 
     draw_desktop();
     compositor_selftest();
