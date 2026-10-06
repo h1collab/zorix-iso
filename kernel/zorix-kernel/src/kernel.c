@@ -931,7 +931,7 @@ static U64 syscall_dispatch(U64 nr, U64 arg0, U64 arg1, U64 arg2) {
     if (nr == ZK_SYS_YIELD) return 0U;
     if (nr == ZK_SYS_GETPID) return 1U;
     if (nr == ZK_SYS_CLOCK_TICKS) return zk_timer_ticks;
-    if (nr == ZK_SYS_ABI_VERSION) return 0x00030000ULL;
+    if (nr == ZK_SYS_ABI_VERSION) return 0x00050000ULL;
     return ~0ULL;
 }
 
@@ -940,7 +940,7 @@ static void syscall_selftest(void) {
     U64 pid = syscall_dispatch(ZK_SYS_GETPID,0,0,0);
     U64 abi = syscall_dispatch(ZK_SYS_ABI_VERSION,0,0,0);
     U64 clock = syscall_dispatch(ZK_SYS_CLOCK_TICKS,0,0,0);
-    if (pid == 1U && abi == 0x00030000ULL && clock >= before &&
+    if (pid == 1U && abi == 0x00050000ULL && clock >= before &&
         syscall_dispatch(0xffffU,0,0,0) == ~0ULL) {
         serial("ZORIX_KERNEL_SYSCALL:native-abi-dispatch-ok\n");
     } else {
@@ -1038,9 +1038,9 @@ static U32 pipe_roundtrip_user(void) {
     return 1U;
 }
 
-__attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr) {
+__attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1, U64 arg2) {
     if (nr == 0U) return 42U;
-    if (nr == 1U) return 0x00040000ULL;
+    if (nr == 1U) return 0x00050000ULL;
     if (nr == 2U) return zk_timer_ticks;
     if (nr == 3U) return 0U;
     if (nr == 4U) {
@@ -1056,6 +1056,35 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr) {
     if (nr == 6U) return pipe_roundtrip_user();
     if (nr == 7U) return 1U;
     if (nr == 8U) return 1U;
+
+    /* Native desktop graphics ABI. Coordinates are packed as
+     * (x << 32) | y. Color is 0xRRGGBB. */
+    if (nr == 9U) {
+        if (!g_gop || !g_gop->mode || !g_gop->mode->info) return 0U;
+        return ((U64)g_gop->mode->info->width << 32) | (U64)g_gop->mode->info->height;
+    }
+    if (nr == 10U) {
+        U32 x0=(U32)(arg0>>32), y0=(U32)arg0;
+        U32 x1=(U32)(arg1>>32), y1=(U32)arg1;
+        U8 r=(U8)((arg2>>16)&0xffU), g=(U8)((arg2>>8)&0xffU), b=(U8)(arg2&0xffU);
+        backbuffer_rect(x0,y0,x1,y1,r,g,b);
+        return 1U;
+    }
+    if (nr == 11U) {
+        U32 x0=(U32)(arg0>>32), y0=(U32)arg0;
+        U32 x1=(U32)(arg1>>32), y1=(U32)arg1;
+        present_rect(x0,y0,x1,y1);
+        return 1U;
+    }
+    if (nr == 12U) {
+        serial("ZORIX_GLASS_NATIVE:userspace-render-ready\n");
+        return 1U;
+    }
+    if (nr == 13U) {
+        U64 until=zk_timer_ticks+arg0;
+        while(zk_timer_ticks<until) zk_hlt();
+        return zk_timer_ticks;
+    }
     return ~0ULL;
 }
 
@@ -1128,7 +1157,6 @@ static void kernel_main(void) {
     serial("ZORIX_KERNEL_STAGE:ring3-probe-start\n");
     ring3_userspace_probe();
 
-    draw_desktop();
     compositor_selftest();
     serial("ZORIX_KERNEL_STAGE:compositor-ready\n");
 
