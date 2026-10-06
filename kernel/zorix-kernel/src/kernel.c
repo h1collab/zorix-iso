@@ -227,6 +227,7 @@ extern U8 zk_files_blob_end[];
 extern U32 zk_runtime_selftest(void);
 extern U32 zk_linux_abi_selftest(void);
 extern U32 zk_installer_selftest(void);
+extern U32 zk_driver_core_selftest(void);
 
 volatile U64 zk_breakpoint_hits = 0;
 volatile U64 zk_timer_ticks = 0;
@@ -1297,6 +1298,16 @@ static void userspace_foundation_selftest(void) {
     } else {
         serial("ZORIX_KERNEL_ERROR:native-installer-plan\n");
     }
+
+    U32 drv=zk_driver_core_selftest();
+    if(drv&1U) serial("ZORIX_DRIVER_AHCI:command-path-ok\n");
+    if(drv&2U) serial("ZORIX_DRIVER_NVME:command-path-ok\n");
+    if(drv&4U) serial("ZORIX_DRIVER_XHCI:command-path-ok\n");
+    if(drv&8U) serial("ZORIX_DRIVER_AUDIO:verb-path-ok\n");
+    if(drv&16U) serial("ZORIX_DRIVER_NET:tx-frame-ok\n");
+    if(drv&32U) serial("ZORIX_DRIVER_WIFI:frame-path-ok\n");
+    if(drv&64U) serial("ZORIX_DRIVER_BLUETOOTH:hci-path-ok\n");
+    if(drv!=127U) serial("ZORIX_KERNEL_ERROR:driver-command-path\n");
 
     serial("ZORIX_KERNEL_STAGE:userspace-foundation-ready\n");
 }
