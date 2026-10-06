@@ -69,7 +69,7 @@ struct BS {
     HDR h;
     void *raise;
     void *restore;
-    void *allocpages;
+    STATUS (EFIAPI *allocpages)(U32,U32,UN,U64*);
     void *freepages;
     STATUS (EFIAPI *memmap)(UN*, void*, UN*, UN*, U32*);
     STATUS (EFIAPI *alloc)(U32, UN, void**);
@@ -206,6 +206,7 @@ extern void zk_hlt(void);
 extern void zk_pause(void);
 extern U64 zk_rdtsc(void);
 extern U64 zk_read_cr3(void);
+extern void zk_write_cr3(U64 value);
 extern U16 zk_read_cs(void);
 extern void zk_store_idt(IDTR *out);
 extern void zk_load_idt(const IDTR *in);
@@ -243,6 +244,7 @@ static IDT_ENTRY g_idt[256];
 static U64 g_gdt[7];
 static TSS64 g_tss;
 static U8 *g_kernel_stack;
+static U8 *g_user_allocation;
 static U8 *g_user_region;
 static volatile U32 g_user_probe_ok;
 static volatile U32 g_user_probe_fail;
@@ -463,6 +465,17 @@ static STATUS prepare_heap_and_backbuffer(void) {
     return 0;
 }
 
+static STATUS prepare_user_region(void) {
+    U64 raw=0;
+    STATUS s=g_bs->allocpages(0U,2U,1024U,&raw);
+    if(FAILED(s)||!raw) return s;
+    g_user_allocation=(U8*)(UN)raw;
+    U64 aligned=(raw+0x1fffffULL)&~0x1fffffULL;
+    if(aligned+0x200000ULL>raw+0x400000ULL) return EFI_ERROR_BIT|9ULL;
+    g_user_region=(U8*)(UN)aligned;
+    return 0;
+}
+
 static STATUS leave_firmware(HANDLE image) {
     UN map_size = 0, key = 0, desc_size = 0;
     U32 desc_ver = 0;
@@ -654,38 +667,49 @@ static void paging_report(void) {
     serial(":active\n");
 }
 
-static U32 mark_user_page(U64 va) {
-    U64 *pml4 = (U64*)(UN)(zk_read_cr3() & ~0xfffULL);
-    U32 i4 = (U32)((va >> 39) & 0x1ffULL);
-    U32 i3 = (U32)((va >> 30) & 0x1ffULL);
-    U32 i2 = (U32)((va >> 21) & 0x1ffULL);
-    U32 i1 = (U32)((va >> 12) & 0x1ffULL);
-
-    if (!(pml4[i4] & 1ULL)) return 0U;
-    pml4[i4] |= 4ULL;
-    U64 *pdpt = (U64*)(UN)(pml4[i4] & ~0xfffULL);
-
-    if (!(pdpt[i3] & 1ULL)) return 0U;
-    pdpt[i3] |= 4ULL;
-    if (pdpt[i3] & (1ULL << 7)) return 1U;
-    U64 *pd = (U64*)(UN)(pdpt[i3] & ~0xfffULL);
-
-    if (!(pd[i2] & 1ULL)) return 0U;
-    pd[i2] |= 4ULL;
-    if (pd[i2] & (1ULL << 7)) return 1U;
-    U64 *pt = (U64*)(UN)(pd[i2] & ~0xfffULL);
-
-    if (!(pt[i1] & 1ULL)) return 0U;
-    pt[i1] |= 4ULL;
-    return 1U;
+static U64 *pt_page(void) {
+    U64 *p = (U64*)heap_alloc(4096U,4096U);
+    if (!p) return NULL;
+    for (U32 i=0;i<512U;++i) p[i]=0;
+    return p;
 }
 
-static U32 mark_user_region(void *base, UN bytes) {
-    U64 start = (U64)(UN)base & ~0xfffULL;
-    U64 end = ((U64)(UN)base + bytes + 0xfffULL) & ~0xfffULL;
-    for (U64 va = start; va < end; va += 0x1000ULL) {
-        if (!mark_user_page(va)) return 0U;
+static U32 build_zorix_page_tables(U64 user_base) {
+    if ((user_base & 0x1fffffULL) != 0ULL) return 0U;
+    if (user_base >= 0x100000000ULL) return 0U;
+
+    U64 *pml4=pt_page();
+    U64 *pdpt=pt_page();
+    if(!pml4||!pdpt) return 0U;
+    pml4[0]=(U64)(UN)pdpt|0x003ULL;
+
+    for(U32 gi=0;gi<4U;++gi){
+        U64 *pd=pt_page();
+        if(!pd) return 0U;
+        pdpt[gi]=(U64)(UN)pd|0x003ULL;
+        for(U32 i=0;i<512U;++i){
+            U64 phys=((U64)gi<<30)|((U64)i<<21);
+            pd[i]=phys|0x083ULL;
+        }
     }
+
+    U32 pdpt_i=(U32)((user_base>>30)&0x3ULL);
+    U32 pd_i=(U32)((user_base>>21)&0x1ffULL);
+    U64 *pd=(U64*)(UN)(pdpt[pdpt_i]&~0xfffULL);
+    U64 *pt=pt_page();
+    if(!pt) return 0U;
+    pd[pd_i]=(U64)(UN)pt|0x007ULL;
+    for(U32 i=0;i<512U;++i){
+        U64 phys=user_base+((U64)i<<12);
+        pt[i]=phys|0x007ULL;
+    }
+    pdpt[pdpt_i]|=0x004ULL;
+    pml4[0]|=0x004ULL;
+
+    zk_write_cr3((U64)(UN)pml4);
+    serial("ZORIX_KERNEL_PAGING:zorix-cr3=");
+    serial_hex64((U64)(UN)pml4);
+    serial(":user-isolated\n");
     return 1U;
 }
 
@@ -996,15 +1020,14 @@ static void ring3_userspace_probe(void) {
         return;
     }
 
-    g_user_region = (U8*)heap_alloc(2U * 1024U * 1024U, 4096U);
     if (!g_user_region) {
-        serial("ZORIX_KERNEL_ERROR:user-region-allocation\n");
+        serial("ZORIX_KERNEL_ERROR:user-region-unprepared\n");
         return;
     }
 
     for (UN i = 0; i < blob_size; ++i) g_user_region[i] = zk_user_blob_start[i];
 
-    if (!mark_user_region(g_user_region, 2U * 1024U * 1024U)) {
+    if (!build_zorix_page_tables((U64)(UN)g_user_region)) {
         serial("ZORIX_KERNEL_ERROR:user-page-map\n");
         return;
     }
@@ -1095,6 +1118,13 @@ STATUS EFIAPI efi_main(HANDLE image, ST *system) {
         return s;
     }
     serial("ZORIX_KERNEL_STAGE:desktop-memory-prepared\n");
+
+    s = prepare_user_region();
+    if (FAILED(s)) {
+        serial("ZORIX_KERNEL_ERROR:user-region-preparation\n");
+        return s;
+    }
+    serial("ZORIX_KERNEL_STAGE:user-memory-prepared\n");
 
     s = leave_firmware(image);
     if (FAILED(s)) {
