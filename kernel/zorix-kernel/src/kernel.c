@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MIT
- * Zorix Kernel 0.2
+ * Zorix Kernel 0.3
  *
  * Independent x86-64 desktop-foundation kernel.
  * No Linux kernel code is included or loaded.
@@ -18,7 +18,9 @@ typedef void *HANDLE;
 #define EFI_ERROR_BIT 0x8000000000000000ULL
 #define EFI_BUFFER_TOO_SMALL (EFI_ERROR_BIT | 5ULL)
 #define FAILED(s) (((s) & EFI_ERROR_BIT) != 0)
-#define HEAP_BYTES (16ULL * 1024ULL * 1024ULL)
+#define HEAP_BYTES (32ULL * 1024ULL * 1024ULL)
+#define TIMER_HZ 1000U
+#define COMPOSITOR_HZ 144U
 
 typedef struct { U32 a; U16 b,c; U8 d[8]; } GUID;
 typedef struct { U64 sig; U32 rev,size,crc,reserved; } HDR;
@@ -176,16 +178,20 @@ extern U8 zk_in8(U16 port);
 extern void zk_out32(U16 port, U32 value);
 extern U32 zk_in32(U16 port);
 extern void zk_cli(void);
+extern void zk_sti(void);
 extern void zk_hlt(void);
 extern void zk_pause(void);
 extern U64 zk_rdtsc(void);
+extern U64 zk_read_cr3(void);
 extern U16 zk_read_cs(void);
 extern void zk_store_idt(IDTR *out);
 extern void zk_load_idt(const IDTR *in);
 extern void zk_test_breakpoint(void);
 extern void zk_isr3(void);
+extern void zk_irq0(void);
 
 volatile U64 zk_breakpoint_hits = 0;
+volatile U64 zk_timer_ticks = 0;
 
 static ST *g_st;
 static BS *g_bs;
@@ -202,6 +208,7 @@ static UN g_heap_size;
 
 static U32 *g_backbuffer;
 static UN g_backbuffer_bytes;
+static IDT_ENTRY g_idt[256];
 
 static void uefi_print(CHAR16 *s) {
     if (g_st && g_st->out && g_st->out->print) g_st->out->print(g_st->out, s);
@@ -343,22 +350,50 @@ static void compositor_selftest(void) {
     U32 w = i->width, h = i->height;
     if (w < 320U || h < 240U) return;
 
-    U32 rw = 160U, rh = 48U;
+    U32 rw = 220U, rh = 32U;
     if (rw > w / 2U) rw = w / 2U;
     U32 x0 = (w - rw) / 2U;
-    U32 y0 = h > 110U ? h - 105U : 0U;
+    U32 y0 = h > 115U ? h - 108U : 0U;
 
-    U64 start = zk_rdtsc();
-    for (U32 frame = 0; frame < 120U; ++frame) {
-        U8 glow = (U8)(80U + (frame % 40U) * 3U);
-        backbuffer_rect(x0,y0,x0+rw,y0+rh,20,glow,220);
-        present_rect(x0,y0,x0+rw,y0+rh);
+    U64 cycle_start = zk_rdtsc();
+    U64 tick_start = zk_timer_ticks;
+    U64 last_tick = tick_start;
+    U32 accumulator = 0;
+    U32 frames = 0;
+
+    while (zk_timer_ticks - tick_start < TIMER_HZ) {
+        U64 now = zk_timer_ticks;
+        while (last_tick < now) {
+            ++last_tick;
+            accumulator += COMPOSITOR_HZ;
+            if (accumulator >= TIMER_HZ) {
+                accumulator -= TIMER_HZ;
+                U32 pos = (frames * (rw - 18U)) / COMPOSITOR_HZ;
+                backbuffer_rect(x0,y0,x0+rw,y0+rh,11,24,39);
+                backbuffer_rect(x0+pos,y0+7U,x0+pos+18U,y0+25U,40,180,245);
+                present_rect(x0,y0,x0+rw,y0+rh);
+                ++frames;
+            }
+        }
+        zk_hlt();
     }
-    U64 cycles = zk_rdtsc() - start;
+
+    U64 cycles = zk_rdtsc() - cycle_start;
     serial("ZORIX_KERNEL_RENDER:dirty-rect-cycles=");
     serial_hex64(cycles);
     serial("\n");
-    serial("ZORIX_KERNEL_RENDER:dirty-rect-present-ok\n");
+    serial("ZORIX_KERNEL_RENDER:target_hz=");
+    serial_u32(COMPOSITOR_HZ);
+    serial(":frames=");
+    serial_u32(frames);
+    serial("\n");
+
+    if (frames >= COMPOSITOR_HZ - 1U && frames <= COMPOSITOR_HZ + 1U) {
+        serial("ZORIX_KERNEL_RENDER:144hz-cadence-ok\n");
+        serial("ZORIX_KERNEL_RENDER:dirty-rect-present-ok\n");
+    } else {
+        serial("ZORIX_KERNEL_ERROR:compositor-cadence\n");
+    }
 }
 
 static STATUS prepare_heap_and_backbuffer(void) {
@@ -446,27 +481,75 @@ static void set_gate(IDT_ENTRY *e, U64 fn, U16 cs) {
     e->zero = 0;
 }
 
-static void idt_selftest(void) {
-    static IDT_ENTRY table[256];
+static void idt_init(void) {
     for (U32 i = 0; i < 256U; ++i) {
-        U8 *p = (U8*)&table[i];
+        U8 *p = (U8*)&g_idt[i];
         for (U32 n = 0; n < sizeof(IDT_ENTRY); ++n) p[n] = 0;
     }
 
-    IDTR old_idt;
-    IDTR new_idt;
-    zk_store_idt(&old_idt);
-    set_gate(&table[3], (U64)(UN)zk_isr3, zk_read_cs());
-    new_idt.limit = (U16)(sizeof(table) - 1U);
-    new_idt.base = (U64)(UN)table;
+    U16 cs = zk_read_cs();
+    set_gate(&g_idt[3], (U64)(UN)zk_isr3, cs);
+    set_gate(&g_idt[32], (U64)(UN)zk_irq0, cs);
+
+    IDTR idt;
+    idt.limit = (U16)(sizeof(g_idt) - 1U);
+    idt.base = (U64)(UN)g_idt;
 
     zk_breakpoint_hits = 0;
-    zk_load_idt(&new_idt);
+    zk_load_idt(&idt);
     zk_test_breakpoint();
-    zk_load_idt(&old_idt);
 
     if (zk_breakpoint_hits == 1U) serial("ZORIX_KERNEL_IDT:breakpoint-ok\n");
     else serial("ZORIX_KERNEL_ERROR:idt-selftest\n");
+}
+
+static void io_wait(void) {
+    zk_out8(0x80U, 0U);
+}
+
+static void pic_remap_timer_only(void) {
+    zk_cli();
+
+    zk_out8(0x20U, 0x11U); io_wait();
+    zk_out8(0xa0U, 0x11U); io_wait();
+
+    zk_out8(0x21U, 0x20U); io_wait();
+    zk_out8(0xa1U, 0x28U); io_wait();
+
+    zk_out8(0x21U, 0x04U); io_wait();
+    zk_out8(0xa1U, 0x02U); io_wait();
+
+    zk_out8(0x21U, 0x01U); io_wait();
+    zk_out8(0xa1U, 0x01U); io_wait();
+
+    zk_out8(0x21U, 0xfeU);
+    zk_out8(0xa1U, 0xffU);
+}
+
+static void timer_init(void) {
+    pic_remap_timer_only();
+
+    const U32 divisor = 1193182U / TIMER_HZ;
+    zk_out8(0x43U, 0x34U);
+    zk_out8(0x40U, (U8)(divisor & 0xffU));
+    zk_out8(0x40U, (U8)((divisor >> 8) & 0xffU));
+
+    zk_timer_ticks = 0;
+    zk_sti();
+
+    U64 start = zk_timer_ticks;
+    while (zk_timer_ticks - start < 32U) zk_hlt();
+
+    serial("ZORIX_KERNEL_TIMER:tick_hz=");
+    serial_u32(TIMER_HZ);
+    serial(":irq0-ok\n");
+}
+
+static void paging_report(void) {
+    U64 cr3 = zk_read_cr3();
+    serial("ZORIX_KERNEL_PAGING:cr3=");
+    serial_hex64(cr3 & ~0xfffULL);
+    serial(":active\n");
 }
 
 static U32 pci_read32(U8 bus, U8 dev, U8 fn, U8 reg) {
@@ -534,8 +617,13 @@ static void kernel_main(void) {
     memory_selftest();
     serial("ZORIX_KERNEL_STAGE:memory-ready\n");
 
-    idt_selftest();
+    idt_init();
     serial("ZORIX_KERNEL_STAGE:idt-ready\n");
+
+    paging_report();
+
+    timer_init();
+    serial("ZORIX_KERNEL_STAGE:timer-ready\n");
 
     pci_report();
     serial("ZORIX_KERNEL_STAGE:pci-ready\n");
@@ -548,7 +636,6 @@ static void kernel_main(void) {
 
     serial("ZORIX_KERNEL_STATUS:desktop-foundation-running\n");
 
-    zk_cli();
     for (;;) {
         zk_pause();
         zk_hlt();
@@ -563,7 +650,7 @@ STATUS EFIAPI efi_main(HANDLE image, ST *system) {
 
     if (!g_bs) return EFI_ERROR_BIT | 2ULL;
 
-    uefi_print(L"\r\nZorix Kernel 0.2 - desktop foundation\r\n");
+    uefi_print(L"\r\nZorix Kernel 0.3 - high-refresh desktop foundation\r\n");
     uefi_print(L"Independent native kernel; no Linux kernel is loaded.\r\n");
 
     STATUS s = g_bs->locate(&gop_guid, NULL, (void**)&g_gop);
