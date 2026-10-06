@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MIT
- * Zorix Kernel 0.3
+ * Zorix Kernel 0.4
  *
  * Independent x86-64 desktop-foundation kernel.
  * No Linux kernel code is included or loaded.
@@ -153,6 +153,29 @@ typedef struct __attribute__((packed)) {
     U64 base;
 } IDTR;
 
+typedef struct __attribute__((packed)) {
+    U32 reserved0;
+    U64 rsp0;
+    U64 rsp1;
+    U64 rsp2;
+    U64 reserved1;
+    U64 ist1;
+    U64 ist2;
+    U64 ist3;
+    U64 ist4;
+    U64 ist5;
+    U64 ist6;
+    U64 ist7;
+    U64 reserved2;
+    U16 reserved3;
+    U16 iomap;
+} TSS64;
+
+typedef struct __attribute__((packed)) {
+    U16 limit;
+    U64 base;
+} GDTR;
+
 typedef struct {
     U32 devices;
     U32 storage;
@@ -189,6 +212,12 @@ extern void zk_load_idt(const IDTR *in);
 extern void zk_test_breakpoint(void);
 extern void zk_isr3(void);
 extern void zk_irq0(void);
+extern void zk_lgdt(const void *gdtr);
+extern void zk_ltr(U16 selector);
+extern void zk_enter_user(void *entry, void *user_rsp);
+extern void zk_int80(void);
+extern U8 zk_user_blob_start[];
+extern U8 zk_user_blob_end[];
 
 volatile U64 zk_breakpoint_hits = 0;
 volatile U64 zk_timer_ticks = 0;
@@ -209,6 +238,13 @@ static UN g_heap_size;
 static U32 *g_backbuffer;
 static UN g_backbuffer_bytes;
 static IDT_ENTRY g_idt[256];
+
+static U64 g_gdt[7];
+static TSS64 g_tss;
+static U8 *g_kernel_stack;
+static U8 *g_user_region;
+static volatile U32 g_user_probe_ok;
+static volatile U32 g_user_probe_fail;
 
 static void uefi_print(CHAR16 *s) {
     if (g_st && g_st->out && g_st->out->print) g_st->out->print(g_st->out, s);
@@ -485,6 +521,54 @@ static void memory_selftest(void) {
     }
 }
 
+static U64 gdt_code_data(U32 base, U32 limit, U8 access, U8 flags) {
+    U64 d = 0;
+    d |= (U64)(limit & 0xffffU);
+    d |= (U64)(base & 0xffffU) << 16;
+    d |= (U64)((base >> 16) & 0xffU) << 32;
+    d |= (U64)access << 40;
+    d |= (U64)((limit >> 16) & 0x0fU) << 48;
+    d |= (U64)(flags & 0x0fU) << 52;
+    d |= (U64)((base >> 24) & 0xffU) << 56;
+    return d;
+}
+
+static void gdt_tss_init(void) {
+    for (U32 i = 0; i < 7U; ++i) g_gdt[i] = 0;
+    U8 *tp = (U8*)&g_tss;
+    for (U32 i = 0; i < sizeof(g_tss); ++i) tp[i] = 0;
+
+    g_kernel_stack = (U8*)heap_alloc(64U * 1024U, 16U);
+    if (!g_kernel_stack) {
+        serial("ZORIX_KERNEL_ERROR:kernel-stack-allocation\n");
+        return;
+    }
+
+    g_tss.rsp0 = (U64)(UN)(g_kernel_stack + 64U * 1024U);
+    g_tss.iomap = sizeof(g_tss);
+
+    g_gdt[1] = gdt_code_data(0,0xfffffU,0x9aU,0x0aU); /* kernel code 0x08 */
+    g_gdt[2] = gdt_code_data(0,0xfffffU,0x92U,0x0cU); /* kernel data 0x10 */
+    g_gdt[3] = gdt_code_data(0,0xfffffU,0xfaU,0x0aU); /* user code 0x18 */
+    g_gdt[4] = gdt_code_data(0,0xfffffU,0xf2U,0x0cU); /* user data 0x20 */
+
+    U64 base = (U64)(UN)&g_tss;
+    U64 limit = sizeof(g_tss) - 1U;
+    g_gdt[5] = (limit & 0xffffULL) |
+               ((base & 0xffffffULL) << 16) |
+               (0x89ULL << 40) |
+               (((limit >> 16) & 0x0fULL) << 48) |
+               (((base >> 24) & 0xffULL) << 56);
+    g_gdt[6] = base >> 32;
+
+    GDTR gdtr;
+    gdtr.limit = (U16)(sizeof(g_gdt) - 1U);
+    gdtr.base = (U64)(UN)g_gdt;
+    zk_lgdt(&gdtr);
+    zk_ltr(0x28U);
+    serial("ZORIX_KERNEL_GDT:tss-ring3-ready\n");
+}
+
 static void set_gate(IDT_ENTRY *e, U64 fn, U16 cs) {
     e->offset_lo = (U16)(fn & 0xffffU);
     e->selector = cs;
@@ -504,6 +588,8 @@ static void idt_init(void) {
     U16 cs = zk_read_cs();
     set_gate(&g_idt[3], (U64)(UN)zk_isr3, cs);
     set_gate(&g_idt[32], (U64)(UN)zk_irq0, cs);
+    set_gate(&g_idt[0x80], (U64)(UN)zk_int80, cs);
+    g_idt[0x80].type_attr = 0xeeU;
 
     IDTR idt;
     idt.limit = (U16)(sizeof(g_idt) - 1U);
@@ -835,6 +921,66 @@ static void futex_selftest(void) {
     }
 }
 
+static U32 pipe_roundtrip_user(void) {
+    PIPE pipe = {{0},0U,0U,0U};
+    U8 src[4] = {'R','3','O','K'};
+    U8 dst[4] = {0};
+    if (pipe_write(&pipe,src,4U) != 4U) return 0U;
+    if (pipe_read(&pipe,dst,4U) != 4U) return 0U;
+    for (U32 i = 0; i < 4U; ++i) if (src[i] != dst[i]) return 0U;
+    return 1U;
+}
+
+__attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr) {
+    if (nr == 0U) return 42U;
+    if (nr == 1U) return 0x00040000ULL;
+    if (nr == 2U) return zk_timer_ticks;
+    if (nr == 3U) {
+        serial("ZORIX_KERNEL_USER:exit-request\n");
+        for (;;) zk_hlt();
+    }
+    if (nr == 4U) {
+        g_user_probe_ok = 1U;
+        serial("ZORIX_KERNEL_USER:cpl3-syscall-ok\n");
+        return 1U;
+    }
+    if (nr == 5U) {
+        g_user_probe_fail = 1U;
+        serial("ZORIX_KERNEL_ERROR:ring3-user-probe\n");
+        return 0U;
+    }
+    if (nr == 6U) return pipe_roundtrip_user();
+    if (nr == 7U) return 1U;
+    if (nr == 8U) return 1U;
+    return ~0ULL;
+}
+
+static void ring3_userspace_probe(void) {
+    UN blob_size = (UN)(zk_user_blob_end - zk_user_blob_start);
+    if (blob_size == 0U || blob_size > 4096U) {
+        serial("ZORIX_KERNEL_ERROR:user-blob-size\n");
+        return;
+    }
+
+    g_user_region = (U8*)heap_alloc(2U * 1024U * 1024U, 4096U);
+    if (!g_user_region) {
+        serial("ZORIX_KERNEL_ERROR:user-region-allocation\n");
+        return;
+    }
+
+    for (UN i = 0; i < blob_size; ++i) g_user_region[i] = zk_user_blob_start[i];
+
+    U8 *user_stack_top = g_user_region + (2U * 1024U * 1024U) - 16U;
+    g_user_probe_ok = 0U;
+    g_user_probe_fail = 0U;
+
+    serial("ZORIX_KERNEL_USER:enter-cpl3\n");
+    zk_enter_user((void*)g_user_region, (void*)user_stack_top);
+
+    /* zk_enter_user returns only if the user entry faults before iret. */
+    serial("ZORIX_KERNEL_ERROR:ring3-returned-unexpectedly\n");
+}
+
 static void userspace_foundation_selftest(void) {
     scheduler_selftest();
     syscall_selftest();
@@ -850,6 +996,8 @@ static void kernel_main(void) {
     memory_selftest();
     serial("ZORIX_KERNEL_STAGE:memory-ready\n");
 
+    gdt_tss_init();
+
     idt_init();
     serial("ZORIX_KERNEL_STAGE:idt-ready\n");
 
@@ -864,6 +1012,8 @@ static void kernel_main(void) {
     input_probe();
 
     userspace_foundation_selftest();
+    serial("ZORIX_KERNEL_STAGE:ring3-probe-start\n");
+    ring3_userspace_probe();
 
     draw_desktop();
     compositor_selftest();
@@ -885,7 +1035,7 @@ STATUS EFIAPI efi_main(HANDLE image, ST *system) {
 
     if (!g_bs) return EFI_ERROR_BIT | 2ULL;
 
-    uefi_print(L"\r\nZorix Kernel 0.3 - high-refresh desktop foundation\r\n");
+    uefi_print(L"\r\nZorix Kernel 0.4 - ring3 userspace foundation\r\n");
     uefi_print(L"Independent native kernel; no Linux kernel is loaded.\r\n");
 
     STATUS s = g_bs->locate(&gop_guid, NULL, (void**)&g_gop);
