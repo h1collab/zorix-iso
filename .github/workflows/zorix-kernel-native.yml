@@ -37,7 +37,8 @@ jobs:
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/runtime.c -o out/runtime.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/linux_abi.c -o out/linux_abi.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/installer.c -o out/installer.obj
-          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj out/apps.obj out/runtime.obj out/linux_abi.obj out/installer.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/driver_core.c -o out/driver_core.obj
+          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj out/apps.obj out/runtime.obj out/linux_abi.obj out/installer.obj out/driver_core.obj
           test -s out/ZORIXKERNEL.EFI
           sha256sum out/ZORIXKERNEL.EFI
 
@@ -117,6 +118,13 @@ jobs:
               grep -Fq 'ZORIX_LINUX_ABI:syscall-subset-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_INSTALLER_GPT:plan-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_INSTALLER_UEFI:esp-root-layout-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_AHCI:command-path-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_NVME:command-path-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_XHCI:command-path-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_AUDIO:verb-path-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_NET:tx-frame-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_WIFI:frame-path-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_DRIVER_BLUETOOTH:hci-path-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:userspace-foundation-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_GDT:tss-ring3-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_PAGING:user-pages-enabled' out/kernel-serial.log
