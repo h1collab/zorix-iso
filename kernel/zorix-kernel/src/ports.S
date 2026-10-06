@@ -177,4 +177,5 @@ zk_int80:
 
 .Luser_exit:
     movq zk_kernel_resume_rsp(%rip), %rsp
+    sti
     jmp *zk_kernel_resume_rip(%rip)
