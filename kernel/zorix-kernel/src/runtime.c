@@ -128,7 +128,6 @@ void zk_ramfs_init(ZK_RAMFS *fs) {
 
 ZK_RAMFS_FILE *zk_ramfs_create(ZK_RAMFS *fs,const char *name,U8 *storage,U32 capacity,U32 mode) {
     if(!fs||!name||!storage||!capacity||fs->count>=16U) return (ZK_RAMFS_FILE*)0;
-    if(zk_ramfs_create==0) return (ZK_RAMFS_FILE*)0; /* keeps freestanding LTO honest */
     for(U32 i=0;i<fs->count;++i) if(streq(fs->files[i].name,name)) return (ZK_RAMFS_FILE*)0;
     ZK_RAMFS_FILE *f=&fs->files[fs->count++];
     memzero(f,sizeof(*f));
@@ -214,4 +213,70 @@ U32 zk_driver_register(ZK_DRIVER_REGISTRY *r,U32 kind,U16 vendor,U16 device,U8 b
     d->function=function;
     d->ready=0U;
     return 1U;
+}
+
+
+U32 zk_runtime_selftest(void) {
+    U32 mask=0U;
+
+    /* Concrete RAMFS create/write/read path. */
+    ZK_RAMFS fs;
+    U8 file_storage[128];
+    U8 readback[16];
+    const U8 payload[8]={'G','L','A','S','S','0','5','\n'};
+    zk_ramfs_init(&fs);
+    ZK_RAMFS_FILE *file=zk_ramfs_create(&fs,"/system/glass",file_storage,sizeof(file_storage),0755U);
+    if(file && zk_ramfs_write(file,payload,sizeof(payload))==sizeof(payload) &&
+       zk_ramfs_find(&fs,"/system/glass")==file &&
+       zk_ramfs_read(file,readback,sizeof(readback))==sizeof(payload)) {
+        U32 same=1U;
+        for(U32 i=0;i<sizeof(payload);++i) if(readback[i]!=payload[i]) same=0U;
+        if(same) mask|=1U;
+    }
+
+    /* Concrete ELF64 header + PT_LOAD parsing. */
+    U8 elf[sizeof(ELF64_EHDR)+sizeof(ELF64_PHDR)+16U];
+    memzero(elf,sizeof(elf));
+    ELF64_EHDR *eh=(ELF64_EHDR*)elf;
+    eh->ident[0]=0x7fU; eh->ident[1]='E'; eh->ident[2]='L'; eh->ident[3]='F';
+    eh->ident[4]=2U; eh->ident[5]=1U; eh->ident[6]=1U;
+    eh->type=2U; eh->machine=62U; eh->version=1U;
+    eh->entry=0x400000U;
+    eh->phoff=sizeof(ELF64_EHDR);
+    eh->ehsize=sizeof(ELF64_EHDR);
+    eh->phentsize=sizeof(ELF64_PHDR);
+    eh->phnum=1U;
+    ELF64_PHDR *ph=(ELF64_PHDR*)(elf+eh->phoff);
+    ph->type=1U; ph->flags=5U;
+    ph->offset=sizeof(ELF64_EHDR)+sizeof(ELF64_PHDR);
+    ph->vaddr=0x400000U; ph->filesz=4U; ph->memsz=4096U; ph->align=4096U;
+    elf[ph->offset+0U]=0x90U;
+    elf[ph->offset+1U]=0x90U;
+    elf[ph->offset+2U]=0xc3U;
+    elf[ph->offset+3U]=0x00U;
+    U64 entry=0;
+    U32 segments=0;
+    if(zk_elf64_validate(elf,sizeof(elf),&entry,&segments) && entry==0x400000U && segments==1U) mask|=2U;
+
+    /* Concrete process table with more than one application. */
+    ZK_PROCESS_TABLE pt;
+    zk_process_table_init(&pt);
+    ZK_PROCESS *glass=zk_process_spawn(&pt,"glass-shell",0x400000U,4096U);
+    ZK_PROCESS *settings=zk_process_spawn(&pt,"settings",0x410000U,4096U);
+    if(glass&&settings&&glass->pid!=settings->pid&&pt.count==2U) mask|=4U;
+
+    /* Concrete driver registry coverage for the desktop migration matrix. */
+    ZK_DRIVER_REGISTRY dr;
+    zk_driver_registry_init(&dr);
+    U32 registered=0U;
+    registered+=zk_driver_register(&dr,ZK_DRV_AHCI,0x8086U,0x2922U,0,31,2);
+    registered+=zk_driver_register(&dr,ZK_DRV_NVME,0x1b36U,0x0010U,1,0,0);
+    registered+=zk_driver_register(&dr,ZK_DRV_XHCI,0x1b36U,0x000dU,0,5,0);
+    registered+=zk_driver_register(&dr,ZK_DRV_NET,0x1af4U,0x1000U,0,3,0);
+    registered+=zk_driver_register(&dr,ZK_DRV_AUDIO,0x8086U,0x2668U,0,27,0);
+    registered+=zk_driver_register(&dr,ZK_DRV_BLUETOOTH,0x0000U,0x0000U,0,0,0);
+    registered+=zk_driver_register(&dr,ZK_DRV_WIFI,0x8086U,0x2725U,2,0,0);
+    if(registered==7U&&dr.count==7U) mask|=8U;
+
+    return mask;
 }
