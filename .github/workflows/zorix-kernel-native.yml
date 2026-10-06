@@ -35,7 +35,9 @@ jobs:
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -mno-red-zone -c             kernel/zorix-kernel/src/user.S -o out/user.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -mno-red-zone -c             kernel/zorix-kernel/src/apps.S -o out/apps.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/runtime.c -o out/runtime.obj
-          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj out/apps.obj out/runtime.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/linux_abi.c -o out/linux_abi.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/installer.c -o out/installer.obj
+          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj out/apps.obj out/runtime.obj out/linux_abi.obj out/installer.obj
           test -s out/ZORIXKERNEL.EFI
           sha256sum out/ZORIXKERNEL.EFI
 
@@ -112,6 +114,9 @@ jobs:
               grep -Fq 'ZORIX_APP_FILES:ring3-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_RUNTIME_PROCESS:multi-ring3-launch-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_RUNTIME_DRIVERS:registry-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_LINUX_ABI:syscall-subset-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_INSTALLER_GPT:plan-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_INSTALLER_UEFI:esp-root-layout-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:userspace-foundation-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_GDT:tss-ring3-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_PAGING:user-pages-enabled' out/kernel-serial.log
