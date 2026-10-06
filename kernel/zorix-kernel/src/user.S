@@ -94,7 +94,14 @@ zk_user_blob_start:
     jb .Lfail
 
     /* Pixel-level Liquid Glass desktop. */
-    GRAD 0,0,1024,768,0x07111f,0x102a4d
+    /* Full framebuffer gradient: use runtime width/height, not a 1024x768 assumption. */
+    xorq %rbx, %rbx
+    movq %r12, %r10
+    shlq $32, %r10
+    orq %r13, %r10
+    movabsq $((0x102a4d << 24) | 0x07111f), %r11
+    movq $19, %rax
+    int $0x80
 
     /* Soft aurora lights behind the glass. */
     ROUND 58,100,410,452,0x157efb,92,150
@@ -294,6 +301,41 @@ zk_user_blob_start:
     int $0x80
     decl %r15d
     jnz .Linput_loop
+
+    /* Repaint the final focused desktop after CI drag so the captured frame
+     * keeps full content instead of the simplified drag proxy. */
+    GLASS 126,92,914,650,0x142d49,138,28,12,118
+    GLASS 148,116,892,158,0x244d73,116,18,9,94
+    ROUND 170,128,184,142,0xff6b7d,240,7
+    ROUND 194,128,208,142,0xffc85a,240,7
+    ROUND 218,128,232,142,0x55dc91,240,7
+    GLASS 150,178,316,616,0x0e2339,118,22,9,70
+    GLASS 338,178,886,290,0x1b4166,112,22,11,78
+    GLASS 338,310,598,458,0x173954,104,22,10,70
+    GLASS 618,310,886,458,0x2c2a61,94,22,10,70
+    GLASS 338,478,886,610,0x112e48,106,22,10,70
+    ROUND 170,204,294,244,0x5eb8ff,54,14
+    ROUND 364,212,572,224,0x71c9ff,228,6
+    ROUND 364,244,838,252,0xd8efff,132,4
+    ROUND 364,338,570,354,0x4fe2a1,220,8
+    ROUND 644,338,854,354,0xb48aff,220,8
+    ROUND 364,506,566,522,0xffd36a,220,8
+    ROUND 364,546,842,556,0xb7d8f6,70,5
+    TEXT .Ltitle,166,137,0xf2f8ff,2
+    TEXT .Loverview,364,198,0xe9f6ff,2
+    TEXT .Lsystem,176,218,0xffffff,1
+    TEXT .Lnetwork,176,274,0xd8ebff,1
+    TEXT .Ldisplay,176,330,0xd8ebff,1
+    TEXT .Laudio,176,386,0xd8ebff,1
+
+    /* Present full framebuffer after final repaint. */
+    xorq %rbx, %rbx
+    movq %r12, %r10
+    shlq $32, %r10
+    orq %r13, %r10
+    xorq %r11, %r11
+    movq $11, %rax
+    int $0x80
 
     /* Ring3 proof marker. */
     movq $4, %rax
