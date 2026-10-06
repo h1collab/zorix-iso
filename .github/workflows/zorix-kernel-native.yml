@@ -24,7 +24,7 @@ jobs:
       - name: Install toolchain and QEMU
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq clang lld qemu-system-x86 ovmf dosfstools mtools
+          sudo apt-get install -y -qq clang lld qemu-system-x86 ovmf dosfstools mtools socat imagemagick
 
       - name: Build independent Zorix Kernel EFI image
         run: |
@@ -59,13 +59,23 @@ jobs:
           cp "$VARS" out/OVMF_VARS.fd
           : > out/kernel-serial.log
 
-          timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -drive format=raw,file=out/esp.img               -display none               -serial file:out/kernel-serial.log               -monitor none               -no-reboot -no-shutdown &
+          timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -drive format=raw,file=out/esp.img               -display none               -serial file:out/kernel-serial.log               -monitor unix:/tmp/zorix-kernel-monitor.sock,server,nowait               -no-reboot -no-shutdown &
           pid=$!
 
           for second in $(seq 1 30); do
-            if grep -Fq 'ZORIX_KERNEL_STAGE:kernel-main' out/kernel-serial.log; then
+            if grep -Fq 'ZORIX_KERNEL_STATUS:desktop-foundation-running' out/kernel-serial.log; then
               grep -Fq 'ZORIX_KERNEL_STAGE:boot-services-exited' out/kernel-serial.log
-              grep -Fq 'ZORIX_KERNEL_STATUS:native-kernel-running' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_MEMORY:heap-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_IDT:breakpoint-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_STAGE:pci-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_RENDER:dirty-rect-present-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_KERNEL_STAGE:compositor-ready' out/kernel-serial.log
+              printf 'screendump out/zorix-kernel-0.2.ppm\n' | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock
+              test -s out/zorix-kernel-0.2.ppm
+              magick out/zorix-kernel-0.2.ppm out/zorix-kernel-0.2.png 2>/dev/null || convert out/zorix-kernel-0.2.ppm out/zorix-kernel-0.2.png
+              colors="$(identify -format '%k' out/zorix-kernel-0.2.png)"
+              echo "Zorix Kernel framebuffer unique colors: $colors"
+              test "$colors" -ge 8
               cat out/kernel-serial.log
               kill "$pid" 2>/dev/null || true
               wait "$pid" 2>/dev/null || true
@@ -89,5 +99,6 @@ jobs:
           path: |
             out/ZORIXKERNEL.EFI
             out/kernel-serial.log
+            out/zorix-kernel-0.2.png
           if-no-files-found: warn
           retention-days: 14
