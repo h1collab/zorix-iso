@@ -214,6 +214,7 @@ extern void zk_isr3(void);
 extern void zk_irq0(void);
 extern void zk_lgdt(const void *gdtr);
 extern void zk_ltr(U16 selector);
+extern void zk_reload_segments(void);
 extern void zk_enter_user(void *entry, void *user_rsp);
 extern void zk_int80(void);
 extern U8 zk_user_blob_start[];
@@ -565,6 +566,7 @@ static void gdt_tss_init(void) {
     gdtr.limit = (U16)(sizeof(g_gdt) - 1U);
     gdtr.base = (U64)(UN)g_gdt;
     zk_lgdt(&gdtr);
+    zk_reload_segments();
     zk_ltr(0x28U);
     serial("ZORIX_KERNEL_GDT:tss-ring3-ready\n");
 }
