@@ -354,37 +354,6 @@ static void present_rect(U32 x0, U32 y0, U32 x1, U32 y1) {
     }
 }
 
-static void draw_desktop(void) {
-    GOPINFO *i = g_gop->mode->info;
-    U32 w = i->width, h = i->height;
-
-    backbuffer_rect(0,0,w,h,7,13,23);
-    backbuffer_rect(0,0,w,40,14,22,36);
-
-    U32 side = w > 960U ? 54U : 44U;
-    backbuffer_rect(0,40,side,h,10,18,30);
-
-    U32 win_w = (w * 58U) / 100U;
-    U32 win_h = (h * 58U) / 100U;
-    U32 wx = (w - win_w) / 2U;
-    U32 wy = (h - win_h) / 2U;
-    backbuffer_rect(wx,wy,wx+win_w,wy+win_h,22,33,49);
-    backbuffer_rect(wx,wy,wx+win_w,wy+38U,30,45,65);
-    backbuffer_rect(wx+24U,wy+64U,wx+win_w-24U,wy+win_h-84U,13,23,37);
-
-    U32 dock_w = w > 900U ? 420U : (w * 52U) / 100U;
-    U32 dx = (w - dock_w) / 2U;
-    backbuffer_rect(dx,h-78U,dx+dock_w,h-18U,19,29,43);
-
-    for (U32 n = 0; n < 7U; ++n) {
-        U32 ix = dx + 18U + n * ((dock_w - 36U) / 7U);
-        U32 c = 50U + n * 20U;
-        backbuffer_rect(ix,h-66U,ix+36U,h-30U,(U8)c,(U8)(125U+n*9U),(U8)(210U-n*8U));
-    }
-
-    present_rect(0,0,w,h);
-}
-
 static void compositor_selftest(void) {
     if (!g_gop || !g_gop->mode || !g_gop->mode->info) return;
     GOPINFO *i = g_gop->mode->info;
