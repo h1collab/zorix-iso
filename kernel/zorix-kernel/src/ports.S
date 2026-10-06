@@ -112,6 +112,19 @@ zk_ltr:
     ltr %ax
     ret
 
+.globl zk_reload_segments
+zk_reload_segments:
+    pushq $0x08
+    leaq .Lsegments_loaded(%rip), %rax
+    pushq %rax
+    lretq
+.Lsegments_loaded:
+    movw $0x10, %ax
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %ss
+    ret
+
 .data
 .align 8
 .globl zk_kernel_resume_rsp
