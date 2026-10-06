@@ -128,7 +128,7 @@ typedef struct {
     void *config;
 } ST;
 
-_Static_assert(__builtin_offsetof(BS,memmap) == 64, "UEFI GetMemoryMap ABI");
+_Static_assert(__builtin_offsetof(BS,memmap) == 56, "UEFI GetMemoryMap ABI");
 _Static_assert(__builtin_offsetof(BS,exitbs) == 232, "UEFI ExitBootServices ABI");
 _Static_assert(__builtin_offsetof(BS,locate) == 320, "UEFI LocateProtocol ABI");
 _Static_assert(__builtin_offsetof(ST,bs) == 96, "UEFI SystemTable ABI");
