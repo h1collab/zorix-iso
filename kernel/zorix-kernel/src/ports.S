@@ -165,10 +165,29 @@ zk_int80:
     pushq %rdx
     pushq %r8
     pushq %r9
+    pushq %rbx
+    pushq %r10
+    pushq %r11
     subq $32, %rsp
+
+    /* Native Zorix syscall ABI:
+     * rax = syscall number
+     * rbx = arg0
+     * r10 = arg1
+     * r11 = arg2
+     * return value in rax
+     *
+     * Translate into Windows x64 C ABI for the kernel dispatcher. */
     movq %rax, %rcx
+    movq %rbx, %rdx
+    movq %r10, %r8
+    movq %r11, %r9
     call zk_syscall_int80_dispatch
+
     addq $32, %rsp
+    popq %r11
+    popq %r10
+    popq %rbx
     popq %r9
     popq %r8
     popq %rdx
