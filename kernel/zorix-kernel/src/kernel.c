@@ -1138,6 +1138,7 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
     }
     if (nr == 13U) {
         U64 until=zk_timer_ticks+arg0;
+        zk_sti();
         while(zk_timer_ticks<until) zk_hlt();
         return zk_timer_ticks;
     }
