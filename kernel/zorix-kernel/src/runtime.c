@@ -181,6 +181,30 @@ U32 zk_elf64_validate(const void *image,U32 size,U64 *entry,U32 *load_segments) 
     return 1;
 }
 
+U32 zk_elf64_load(const void *image,U32 size,U8 *target,U32 target_size,U64 image_base,U64 *entry_out) {
+    U64 entry=0;
+    U32 segments=0;
+    if(!zk_elf64_validate(image,size,&entry,&segments)||!target||!target_size) return 0U;
+    memzero(target,target_size);
+
+    const ELF64_EHDR *h=(const ELF64_EHDR*)image;
+    const ELF64_PHDR *ph=(const ELF64_PHDR*)((const U8*)image+h->phoff);
+    U32 loaded=0U;
+    for(U32 i=0;i<h->phnum;++i) {
+        if(ph[i].type!=1U) continue;
+        if(ph[i].vaddr<image_base) return 0U;
+        U64 dst_off=ph[i].vaddr-image_base;
+        if(dst_off>target_size||ph[i].memsz>(U64)target_size-dst_off) return 0U;
+        U8 *dst=target+(UN)dst_off;
+        memzero(dst,(UN)ph[i].memsz);
+        memcopy(dst,(const U8*)image+(UN)ph[i].offset,(UN)ph[i].filesz);
+        ++loaded;
+    }
+    if(loaded!=segments||entry<image_base||entry-image_base>=target_size) return 0U;
+    if(entry_out) *entry_out=(U64)(UN)(target+(UN)(entry-image_base));
+    return loaded;
+}
+
 void zk_process_table_init(ZK_PROCESS_TABLE *pt) {
     memzero(pt,sizeof(*pt));
     pt->next_pid=100U;
@@ -257,6 +281,14 @@ U32 zk_runtime_selftest(void) {
     U64 entry=0;
     U32 segments=0;
     if(zk_elf64_validate(elf,sizeof(elf),&entry,&segments) && entry==0x400000U && segments==1U) mask|=2U;
+
+    U8 loaded_image[4096];
+    U64 relocated_entry=0;
+    U32 loaded_segments=zk_elf64_load(elf,sizeof(elf),loaded_image,sizeof(loaded_image),0x400000U,&relocated_entry);
+    if(loaded_segments==1U &&
+       relocated_entry==(U64)(UN)loaded_image &&
+       loaded_image[0]==0x90U && loaded_image[1]==0x90U && loaded_image[2]==0xc3U &&
+       loaded_image[4]==0U && loaded_image[4095]==0U) mask|=16U;
 
     /* Concrete process table with more than one application. */
     ZK_PROCESS_TABLE pt;
