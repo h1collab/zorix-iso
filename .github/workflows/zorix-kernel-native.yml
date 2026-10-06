@@ -114,6 +114,7 @@ jobs:
               grep -Fq 'ZORIX_KERNEL_FUTEX:wait-wake-state-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_RUNTIME_RAMFS:read-write-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_RUNTIME_ELF:program-loader-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_RUNTIME_ELF:segment-load-bss-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_RUNTIME_PROCESS:multi-app-table-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_APP_SETTINGS:ring3-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_APP_FILES:ring3-ready' out/kernel-serial.log
