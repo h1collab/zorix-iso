@@ -86,6 +86,7 @@ jobs:
                   sleep 0.15
                   printf '%s\n' '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":false,"button":"left"}}]}}'
                 } | socat - UNIX-CONNECT:/tmp/zorix-kernel-qmp.sock > out/qmp-input.log 2>&1 || true
+                printf 'sendkey a\n' | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock > out/hmp-key.log 2>&1 || true
                 exit 0
               fi
               sleep 0.1
@@ -145,6 +146,7 @@ jobs:
               grep -Fq 'ZORIX_GLASS_NATIVE:userspace-render-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_GLASS_INPUT:focus-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_GLASS_INPUT:window-drag-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_GLASS_INPUT:keyboard-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:target_hz=144:scheduled=' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:144hz-cadence-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_RENDER:dirty-rect-present-ok' out/kernel-serial.log
@@ -179,6 +181,7 @@ jobs:
             out/ZORIXKERNEL.EFI
             out/kernel-serial.log
             out/qmp-input.log
+            out/hmp-key.log
             out/zorix-kernel-0.4.png
           if-no-files-found: warn
           retention-days: 14
