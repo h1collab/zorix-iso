@@ -67,7 +67,7 @@ jobs:
 
           # Drive the native Glass pointer pipeline with a real QEMU PS/2 event.
           (
-            for n in $(seq 1 25); do
+            for n in $(seq 1 150); do
               if grep -Fq 'ZORIX_GLASS_NATIVE:userspace-render-ready' out/kernel-serial.log; then
                 {
                   printf '%s\n' '{"execute":"qmp_capabilities"}'
@@ -77,7 +77,7 @@ jobs:
                   printf '%s\n' '{"execute":"input-send-event","arguments":{"events":[{"type":"rel","data":{"axis":"x","value":120}},{"type":"rel","data":{"axis":"y","value":70}}]}}'
                   sleep 0.15
                   printf '%s\n' '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":false,"button":"left"}}]}}'
-                } | socat - UNIX-CONNECT:/tmp/zorix-kernel-qmp.sock > out/qmp-input.log || true
+                } | socat - UNIX-CONNECT:/tmp/zorix-kernel-qmp.sock > out/qmp-input.log 2>&1 || true
                 exit 0
               fi
               sleep 0.1
