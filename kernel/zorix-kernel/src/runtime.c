@@ -282,7 +282,7 @@ U32 zk_runtime_selftest(void) {
     U32 segments=0;
     if(zk_elf64_validate(elf,sizeof(elf),&entry,&segments) && entry==0x400000U && segments==1U) mask|=2U;
 
-    U8 loaded_image[4096];
+    static U8 loaded_image[4096];
     U64 relocated_entry=0;
     U32 loaded_segments=zk_elf64_load(elf,sizeof(elf),loaded_image,sizeof(loaded_image),0x400000U,&relocated_entry);
     if(loaded_segments==1U &&
