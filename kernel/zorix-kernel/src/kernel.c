@@ -225,6 +225,8 @@ extern U8 zk_settings_blob_end[];
 extern U8 zk_files_blob_start[];
 extern U8 zk_files_blob_end[];
 extern U32 zk_runtime_selftest(void);
+extern U32 zk_linux_abi_selftest(void);
+extern U32 zk_installer_selftest(void);
 
 volatile U64 zk_breakpoint_hits = 0;
 volatile U64 zk_timer_ticks = 0;
@@ -1283,6 +1285,18 @@ static void userspace_foundation_selftest(void) {
     else serial("ZORIX_KERNEL_ERROR:process-runtime\n");
     if(runtime&8U) serial("ZORIX_RUNTIME_DRIVERS:registry-ok\n");
     else serial("ZORIX_KERNEL_ERROR:driver-registry\n");
+
+    U32 lx=zk_linux_abi_selftest();
+    if(lx==31U) serial("ZORIX_LINUX_ABI:syscall-subset-ok\n");
+    else serial("ZORIX_KERNEL_ERROR:linux-abi-subset\n");
+
+    U32 inst=zk_installer_selftest();
+    if((inst&1U)&&(inst&2U)&&(inst&4U)&&(inst&8U)) {
+        serial("ZORIX_INSTALLER_GPT:plan-ok\n");
+        serial("ZORIX_INSTALLER_UEFI:esp-root-layout-ok\n");
+    } else {
+        serial("ZORIX_KERNEL_ERROR:native-installer-plan\n");
+    }
 
     serial("ZORIX_KERNEL_STAGE:userspace-foundation-ready\n");
 }
