@@ -220,6 +220,7 @@ extern void zk_enter_user(void *entry, void *user_rsp);
 extern void zk_int80(void);
 extern U8 zk_user_blob_start[];
 extern U8 zk_user_blob_end[];
+extern U32 zk_runtime_selftest(void);
 
 volatile U64 zk_breakpoint_hits = 0;
 volatile U64 zk_timer_ticks = 0;
@@ -1193,6 +1194,17 @@ static void userspace_foundation_selftest(void) {
     elf_selftest();
     ipc_vfs_selftest();
     futex_selftest();
+
+    U32 runtime=zk_runtime_selftest();
+    if(runtime&1U) serial("ZORIX_RUNTIME_RAMFS:read-write-ok\n");
+    else serial("ZORIX_KERNEL_ERROR:ramfs-runtime\n");
+    if(runtime&2U) serial("ZORIX_RUNTIME_ELF:program-loader-ok\n");
+    else serial("ZORIX_KERNEL_ERROR:elf-runtime\n");
+    if(runtime&4U) serial("ZORIX_RUNTIME_PROCESS:multi-app-table-ok\n");
+    else serial("ZORIX_KERNEL_ERROR:process-runtime\n");
+    if(runtime&8U) serial("ZORIX_RUNTIME_DRIVERS:registry-ok\n");
+    else serial("ZORIX_KERNEL_ERROR:driver-registry\n");
+
     serial("ZORIX_KERNEL_STAGE:userspace-foundation-ready\n");
 }
 
