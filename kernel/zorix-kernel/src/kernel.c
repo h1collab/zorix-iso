@@ -246,6 +246,8 @@ static TSS64 g_tss;
 static U8 *g_kernel_stack;
 static U8 *g_user_allocation;
 static U8 *g_user_region;
+static U8 *g_pt_arena;
+static UN g_pt_arena_used;
 static volatile U32 g_user_probe_ok;
 static volatile U32 g_user_probe_fail;
 
@@ -473,6 +475,12 @@ static STATUS prepare_user_region(void) {
     U64 aligned=(raw+0x1fffffULL)&~0x1fffffULL;
     if(aligned+0x200000ULL>raw+0x400000ULL) return EFI_ERROR_BIT|9ULL;
     g_user_region=(U8*)(UN)aligned;
+
+    U64 pt_raw=0;
+    s=g_bs->allocpages(0U,2U,16U,&pt_raw);
+    if(FAILED(s)||!pt_raw||(pt_raw&0xfffULL)) return FAILED(s)?s:(EFI_ERROR_BIT|9ULL);
+    g_pt_arena=(U8*)(UN)pt_raw;
+    g_pt_arena_used=0;
     return 0;
 }
 
@@ -668,8 +676,9 @@ static void paging_report(void) {
 }
 
 static U64 *pt_page(void) {
-    U64 *p = (U64*)heap_alloc(4096U,4096U);
-    if (!p) return NULL;
+    if (!g_pt_arena || g_pt_arena_used + 4096U > 16U * 4096U) return NULL;
+    U64 *p = (U64*)(void*)(g_pt_arena + g_pt_arena_used);
+    g_pt_arena_used += 4096U;
     for (U32 i=0;i<512U;++i) p[i]=0;
     return p;
 }
