@@ -354,6 +354,14 @@ zk_user_blob_start:
     movl $2, %r14d
 
 .Linput_sleep:
+    movq $17, %rax
+    int $0x80
+    testq %rax, %rax
+    jz .Lsleep_tick
+    movq $18, %rax
+    int $0x80
+
+.Lsleep_tick:
     movq $8, %rbx
     movq $13, %rax
     int $0x80
