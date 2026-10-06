@@ -239,6 +239,127 @@ zk_user_blob_start:
     movq $12, %rax
     int $0x80
 
+    /* Real pointer/focus/drag event loop. Runs for about 1.6 seconds
+     * during CI and can be driven by QEMU's PS/2 mouse injection. */
+    xorl %r14d, %r14d          /* 0 idle, 1 focused, 2 dragged */
+    movl $200, %r15d
+.Linput_loop:
+    movq $14, %rax
+    int $0x80
+    movq %rax, %r8
+    movq %rax, %r9
+    shrq $32, %r8             /* x */
+    shrq $8, %r9
+    andq $0x00ffffff, %r9     /* y */
+    movl %eax, %ecx
+    andl $7, %ecx             /* buttons */
+
+    /* Any decoded packet proves the native pointer path is live. */
+    testl %ecx, %ecx
+    jz .Linput_sleep
+
+    /* Left button in the title bar focuses the window. */
+    testl $1, %ecx
+    jz .Linput_sleep
+    cmpl $154, %r8d
+    jb .Linput_sleep
+    cmpl $892, %r8d
+    ja .Linput_sleep
+    cmpl $104, %r9d
+    jb .Linput_sleep
+    cmpl $180, %r9d
+    ja .Linput_sleep
+
+    cmpl $0, %r14d
+    jne .Ldrag_window
+    movq $1, %rbx
+    movq $15, %rax
+    int $0x80
+    movl $1, %r14d
+
+.Ldrag_window:
+    /* Move a complete focused Glass window to the pointer position.
+     * Clamp so it remains on-screen. */
+    movl %r8d, %edx
+    subl $180, %edx
+    cmpl $64, %edx
+    jae .Ldrag_x_low_ok
+    movl $64, %edx
+.Ldrag_x_low_ok:
+    cmpl $460, %edx
+    jbe .Ldrag_x_ok
+    movl $460, %edx
+.Ldrag_x_ok:
+
+    movl %r9d, %esi
+    subl $20, %esi
+    cmpl $60, %esi
+    jae .Ldrag_y_low_ok
+    movl $60, %esi
+.Ldrag_y_low_ok:
+    cmpl $390, %esi
+    jbe .Ldrag_y_ok
+    movl $390, %esi
+.Ldrag_y_ok:
+
+    /* Clear previous central region before moving the window. */
+    movabsq $0x0000005000000040, %rbx
+    movabsq $0x000003c0000002b0, %r10
+    movq $0x07111f, %r11
+    movq $10, %rax
+    int $0x80
+
+    /* Body */
+    movq %rdx, %rbx
+    shlq $32, %rbx
+    orq %rsi, %rbx
+    movl %edx, %eax
+    addl $500, %eax
+    movq %rax, %r10
+    shlq $32, %r10
+    movl %esi, %eax
+    addl $320, %eax
+    orq %rax, %r10
+    movq $0x15243a, %r11
+    movq $10, %rax
+    int $0x80
+
+    /* Focused title bar */
+    movq %rdx, %rbx
+    shlq $32, %rbx
+    orq %rsi, %rbx
+    movl %edx, %eax
+    addl $500, %eax
+    movq %rax, %r10
+    shlq $32, %r10
+    movl %esi, %eax
+    addl $42, %eax
+    orq %rax, %r10
+    movq $0x2c537d, %r11
+    movq $10, %rax
+    int $0x80
+
+    /* Re-present the central desktop region. */
+    movabsq $0x0000005000000040, %rbx
+    movabsq $0x000003c0000002b0, %r10
+    xorq %r11, %r11
+    movq $11, %rax
+    int $0x80
+
+    cmpl $2, %r14d
+    je .Linput_sleep
+    movq $2, %rbx
+    movq $15, %rax
+    int $0x80
+    movl $2, %r14d
+
+.Linput_sleep:
+    movq $8, %rbx
+    movq $13, %rax
+    int $0x80
+    decl %r15d
+    jnz .Linput_loop
+
     /* Ring3 proof marker. */
     movq $4, %rax
     int $0x80
