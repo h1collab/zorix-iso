@@ -59,6 +59,11 @@ zk_read_cr3:
     movq %cr3, %rax
     ret
 
+.globl zk_write_cr3
+zk_write_cr3:
+    movq %rcx, %cr3
+    ret
+
 .globl zk_read_cs
 zk_read_cs:
     movw %cs, %ax
