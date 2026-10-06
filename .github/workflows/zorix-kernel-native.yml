@@ -61,7 +61,7 @@ jobs:
           cp "$VARS" out/OVMF_VARS.fd
           : > out/kernel-serial.log
 
-          timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -drive format=raw,file=out/esp.img               -display none               -serial file:out/kernel-serial.log               -monitor unix:/tmp/zorix-kernel-monitor.sock,server,nowait               -no-reboot -no-shutdown &
+          timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -drive format=raw,file=out/esp.img               -display none               -serial file:out/kernel-serial.log               -monitor unix:/tmp/zorix-kernel-monitor.sock,server,nowait               -qmp unix:/tmp/zorix-kernel-qmp.sock,server,nowait               -no-reboot -no-shutdown &
           pid=$!
 
           # Drive the native Glass pointer pipeline with a real QEMU PS/2 event.
@@ -69,11 +69,14 @@ jobs:
             for n in $(seq 1 25); do
               if grep -Fq 'ZORIX_GLASS_NATIVE:userspace-render-ready' out/kernel-serial.log; then
                 {
-                  printf 'mouse_move -300 -250\n'
-                  printf 'mouse_button 1\n'
-                  printf 'mouse_move 120 70\n'
-                  printf 'mouse_button 0\n'
-                } | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock || true
+                  printf '%s\n' '{"execute":"qmp_capabilities"}'
+                  printf '%s\n' '{"execute":"input-send-event","arguments":{"events":[{"type":"rel","data":{"axis":"x","value":-300}},{"type":"rel","data":{"axis":"y","value":-250}}]}}'
+                  printf '%s\n' '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":true,"button":"left"}}]}}'
+                  sleep 0.15
+                  printf '%s\n' '{"execute":"input-send-event","arguments":{"events":[{"type":"rel","data":{"axis":"x","value":120}},{"type":"rel","data":{"axis":"y","value":70}}]}}'
+                  sleep 0.15
+                  printf '%s\n' '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":false,"button":"left"}}]}}'
+                } | socat - UNIX-CONNECT:/tmp/zorix-kernel-qmp.sock > out/qmp-input.log || true
                 exit 0
               fi
               sleep 0.1
@@ -142,6 +145,7 @@ jobs:
           path: |
             out/ZORIXKERNEL.EFI
             out/kernel-serial.log
+            out/qmp-input.log
             out/zorix-kernel-0.4.png
           if-no-files-found: warn
           retention-days: 14
