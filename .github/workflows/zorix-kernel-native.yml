@@ -38,7 +38,11 @@ jobs:
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/linux_abi.c -o out/linux_abi.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/installer.c -o out/installer.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/driver_core.c -o out/driver_core.obj
-          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj out/apps.obj out/runtime.obj out/linux_abi.obj out/installer.obj out/driver_core.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/zorixfs.c -o out/zorixfs.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/net_stack.c -o out/net_stack.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/audio.c -o out/audio.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/wireless.c -o out/wireless.obj
+          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj out/apps.obj out/runtime.obj out/linux_abi.obj out/installer.obj out/driver_core.obj out/zorixfs.obj out/net_stack.obj out/audio.obj out/wireless.obj
           test -s out/ZORIXKERNEL.EFI
           sha256sum out/ZORIXKERNEL.EFI
 
@@ -125,6 +129,11 @@ jobs:
               grep -Fq 'ZORIX_DRIVER_NET:tx-frame-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_DRIVER_WIFI:frame-path-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_DRIVER_BLUETOOTH:hci-path-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_FS:format-mount-read-write-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_NET:arp-ipv4-udp-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_AUDIO:48khz-mixer-ring-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_WIFI:80211-parser-ok' out/kernel-serial.log
+              grep -Fq 'ZORIX_BLUETOOTH:hci-state-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_STAGE:userspace-foundation-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_GDT:tss-ring3-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_PAGING:user-pages-enabled' out/kernel-serial.log
