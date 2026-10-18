@@ -1,4 +1,4 @@
-# Zorix Native SDK 0.6
+# Zorix Native SDK 0.7
 
 The Zorix SDK targets the independent Zorix Kernel userspace ABI. It does not
 require Linux, glibc, systemd, X11, Wayland or Chromium.
@@ -12,7 +12,7 @@ require Linux, glibc, systemd, X11, Wayland or Chromium.
 - `r10`: argument 1
 - `r11`: argument 2
 - `rax`: return value
-- ABI version: `0x00060000`
+- ABI version: `0x00070000`
 
 ## Native UI
 
