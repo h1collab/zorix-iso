@@ -105,24 +105,21 @@ void zr_glass(U32 *fb,U32 stride,U32 width,U32 height,U32 format,
         U32 *row=fb+(UN)y*stride;
         for(U32 x=x0;x<x1;++x){
             if(!zr_inside(x,y,x0,y0,x1,y1,radius))continue;
-            U32 xm=x>blur?x-blur:0U,xp=x+blur<width?x+blur:width-1U;
-            U32 ym=y>blur?y-blur:0U,yp=y+blur<height?y+blur:height-1U;
-            U32 qx=x>blur/2U?x-blur/2U:0U,qxp=x+blur/2U<width?x+blur/2U:width-1U;
-            U32 qy=y>blur/2U?y-blur/2U:0U,qyp=y+blur/2U<height?y+blur/2U:height-1U;
-            U32 samples[9]={
-                zr_sample(fb,stride,width,height,x,y),
-                zr_sample(fb,stride,width,height,xm,y),
-                zr_sample(fb,stride,width,height,xp,y),
-                zr_sample(fb,stride,width,height,x,ym),
-                zr_sample(fb,stride,width,height,x,yp),
-                zr_sample(fb,stride,width,height,qx,qy),
-                zr_sample(fb,stride,width,height,qxp,qy),
-                zr_sample(fb,stride,width,height,qx,qyp),
-                zr_sample(fb,stride,width,height,qxp,qyp)
-            };
-            U32 sr=0U,sg=0U,sb=0U;
-            for(U32 n=0;n<9U;++n){U8 rr,gg,bb;zr_unpack(samples[n],format,&rr,&gg,&bb);sr+=rr;sg+=gg;sb+=bb;}
-            U32 blurred=zr_pack((U8)(sr/9U),(U8)(sg/9U),(U8)(sb/9U),format);
+            int b=(int)blur;
+            int offs[5]={-b,-b/2,0,b/2,b};
+            U32 sr=0U,sg=0U,sb=0U,samples=0U;
+            for(U32 oy=0U;oy<5U;++oy){
+                for(U32 ox=0U;ox<5U;++ox){
+                    int sx=(int)x+offs[ox],sy=(int)y+offs[oy];
+                    if(sx<0)sx=0; if(sy<0)sy=0;
+                    if((U32)sx>=width)sx=(int)width-1;
+                    if((U32)sy>=height)sy=(int)height-1;
+                    U8 rr,gg,bb;
+                    zr_unpack(zr_sample(fb,stride,width,height,(U32)sx,(U32)sy),format,&rr,&gg,&bb);
+                    sr+=rr;sg+=gg;sb+=bb;++samples;
+                }
+            }
+            U32 blurred=zr_pack((U8)(sr/samples),(U8)(sg/samples),(U8)(sb/samples),format);
             row[x]=zr_blend(blurred,format,tr,tg,tb,alpha);
 
             U32 inset=2U;
