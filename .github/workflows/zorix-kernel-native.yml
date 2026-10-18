@@ -41,6 +41,11 @@ jobs:
           file out/bios_entry.o | grep -F 'ELF 64-bit'
           # Deliberately NOT a BIOS boot acceptance test: core handoff is pending.
           echo 'ZORIX_BIOS_STAGE:entry-assembled-only'
+          clang --target=x86_64-unknown-none-elf -DZORIX_BIOS -ffreestanding \
+            -mno-red-zone -fno-stack-protector -fno-builtin -O2 \
+            -Wall -Wextra -Werror -c kernel/zorix-kernel/src/kernel.c \
+            -o out/bios_kernel.o
+          echo 'ZORIX_BIOS_STAGE:kernel-compiled-only'
 
       - name: Build independent Zorix Kernel EFI image
         run: |
