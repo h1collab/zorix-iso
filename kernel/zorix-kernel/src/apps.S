@@ -210,7 +210,7 @@ zk_files_blob_start:
     jb .Lfiles_fail
 
     /* Full-featured three-column file manager. */
-    APP_GLASS 82,54,942,690,0x10243a,134,26,13,104
+    APP_GLASS 82,54,942,690,0x10243a,208,26,13,108
     APP_ROUND 82,54,942,132,0xffffff,12,26
 
     /* Window controls and title. */
@@ -230,7 +230,7 @@ zk_files_blob_start:
     APP_TEXT .Lsearch,714,83,0xa9c0d2,1
 
     /* Sidebar. */
-    APP_ROUND 98,146,284,658,0x06131f,76,18
+    APP_ROUND 98,146,284,658,0x06131f,156,18
     APP_TEXT .Lfavorites,116,166,0x8fa8ba,1
 
     APP_ROUND 108,190,274,232,0xffffff,20,12
@@ -302,7 +302,7 @@ zk_files_blob_start:
     APP_ROUND 304,454,624,455,0xffffff,14,1
 
     /* Preview column. */
-    APP_ROUND 642,146,924,658,0xffffff,8,18
+    APP_ROUND 642,146,924,658,0x10283f,156,18
     APP_TEXT .Lpreview_hdr,666,170,0x9bb3c5,1
     APP_SYMBOL 9,748,212,68,0x79caff,232
     APP_TEXT .Lreadme,706,298,0xffffff,1
