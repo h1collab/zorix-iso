@@ -242,6 +242,7 @@ extern void zr_gradient(U32*,U32,U32,U32,U32,U32,U32,U32,U32,U32,U32);
 extern void zr_round(U32*,U32,U32,U32,U32,U32,U32,U32,U32,U32,U8,U32);
 extern void zr_glass(U32*,U32,U32,U32,U32,U32,U32,U32,U32,U32,U8,U32,U32,U8);
 extern void zr_text(U32*,U32,U32,U32,U32,const char*,U32,U32,U32,U32);
+extern void zr_symbol(U32*,U32,U32,U32,U32,U32,U32,U32,U32,U32,U8);
 
 volatile U64 zk_breakpoint_hits = 0;
 volatile U64 zk_timer_ticks = 0;
@@ -1341,6 +1342,14 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
         zr_text(g_backbuffer,i->stride,i->width,i->height,i->format,data,
                 (U32)(arg1>>32),(U32)arg1,(U32)(arg2&0xffffffULL),(U32)((arg2>>24)&0xffULL));
         return zk_runtime_file_size(idx);
+    }
+    if (nr == 30U) {
+        if (!g_gop || !g_gop->mode || !g_gop->mode->info) return 0U;
+        GOPINFO *i=g_gop->mode->info;
+        zr_symbol(g_backbuffer,i->stride,i->width,i->height,i->format,
+                  (U32)arg0,(U32)(arg1>>32),(U32)arg1,
+                  (U32)((arg2>>32)&0xffULL),(U32)(arg2&0xffffffULL),(U8)((arg2>>24)&0xffULL));
+        return 1U;
     }
     return ~0ULL;
 }
