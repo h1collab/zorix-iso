@@ -269,6 +269,7 @@ jobs:
           exit 1
 
       - name: Publish verified native ISO release
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
