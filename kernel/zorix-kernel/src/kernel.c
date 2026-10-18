@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MIT
- * Zorix Kernel 0.5
+ * Zorix Kernel 0.7
  *
  * Independent x86-64 desktop-foundation kernel.
  * No Linux kernel code is included or loaded.
@@ -64,6 +64,47 @@ typedef struct {
     void *mode;
 } OUT;
 
+typedef struct {
+    U32 revision;
+    HANDLE parent;
+    ST *system_table;
+    HANDLE device_handle;
+    void *file_path;
+    void *reserved;
+    U32 load_options_size;
+    void *load_options;
+    void *image_base;
+    U64 image_size;
+    U32 image_code_type;
+    U32 image_data_type;
+    STATUS (EFIAPI *unload)(HANDLE);
+} LOADED_IMAGE;
+
+typedef struct FILEP FILEP;
+struct FILEP {
+    U64 revision;
+    STATUS (EFIAPI *open)(FILEP*,FILEP**,CHAR16*,U64,U64);
+    STATUS (EFIAPI *close)(FILEP*);
+    void *delete_file;
+    STATUS (EFIAPI *read)(FILEP*,UN*,void*);
+    void *write;
+    void *getpos;
+    void *setpos;
+    void *getinfo;
+    void *setinfo;
+    void *flush;
+    void *openex;
+    void *readex;
+    void *writeex;
+    void *flushex;
+};
+
+typedef struct {
+    U64 revision;
+    STATUS (EFIAPI *open_volume)(void*,FILEP**);
+} SIMPLE_FS;
+
+
 typedef struct BS BS;
 struct BS {
     HDR h;
@@ -83,7 +124,7 @@ struct BS {
     void *install;
     void *reinstall;
     void *uninstall;
-    void *protocol;
+    STATUS (EFIAPI *protocol)(HANDLE,GUID*,void**);
     void *reserved;
     void *notify;
     void *locatehandle;
@@ -195,6 +236,12 @@ static GUID gop_guid = {
     0x9042a9de, 0x23dc, 0x4a38,
     {0x96,0xfb,0x7a,0xde,0xd0,0x80,0x51,0x6a}
 };
+static GUID loaded_image_guid = {
+    0x5b1b31a1,0x9562,0x11d2,{0x8e,0x3f,0x00,0xa0,0xc9,0x69,0x72,0x3b}
+};
+static GUID simple_fs_guid = {
+    0x964e5b22,0x6459,0x11d2,{0x8e,0x39,0x00,0xa0,0xc9,0x69,0x72,0x3b}
+};
 
 extern void zk_out8(U16 port, U8 value);
 extern U8 zk_in8(U16 port);
@@ -241,6 +288,9 @@ extern U32 zk_runtime_file_count(void);
 extern const char *zk_runtime_file_name(U32 index);
 extern U32 zk_runtime_file_size(U32 index);
 extern const char *zk_runtime_file_data(U32 index);
+extern U32 zk_rootfs_mount(const void *blob,U64 bytes);
+extern U32 zk_rootfs_count(void);
+extern const void *zk_rootfs_find(const char *path,U64 *size);
 
 extern void zr_gradient(U32*,U32,U32,U32,U32,U32,U32,U32,U32,U32,U32);
 extern void zr_round(U32*,U32,U32,U32,U32,U32,U32,U32,U32,U32,U8,U32);
@@ -301,6 +351,8 @@ static U32 g_pci_net;
 static U32 g_pci_audio;
 static U32 g_pci_wifi;
 static U32 g_glass_render_features;
+static void *g_rootfs_blob;
+static U64 g_rootfs_bytes;
 
 static void uefi_print(CHAR16 *s) {
     if (g_st && g_st->out && g_st->out->print) g_st->out->print(g_st->out, s);
@@ -519,6 +571,57 @@ static STATUS prepare_user_region(void) {
     if(FAILED(s)||!pt_raw||(pt_raw&0xfffULL)) return FAILED(s)?s:(EFI_ERROR_BIT|9ULL);
     g_pt_arena=(U8*)(UN)pt_raw;
     g_pt_arena_used=0;
+    return 0;
+}
+
+static STATUS load_native_rootfs(HANDLE image) {
+    if(!g_bs || !g_bs->protocol) return EFI_ERROR_BIT|2ULL;
+
+    LOADED_IMAGE *loaded=NULL;
+    STATUS s=g_bs->protocol(image,&loaded_image_guid,(void**)&loaded);
+    if(FAILED(s)||!loaded||!loaded->device_handle) return s;
+
+    SIMPLE_FS *fs=NULL;
+    s=g_bs->protocol(loaded->device_handle,&simple_fs_guid,(void**)&fs);
+    if(FAILED(s)||!fs||!fs->open_volume) return s;
+
+    FILEP *root=NULL;
+    s=fs->open_volume(fs,&root);
+    if(FAILED(s)||!root) return s;
+
+    FILEP *file=NULL;
+    CHAR16 path[]=L"\\System\\rootfs.zpk";
+    s=root->open(root,&file,path,1ULL,0ULL);
+    if(FAILED(s)||!file){ root->close(root); return s; }
+
+    /* Rootfs is bounded to 256 MiB for the current native image. Read in
+     * chunks until EFI reports EOF (zero-byte read). */
+    const U64 cap=256ULL*1024ULL*1024ULL;
+    void *buf=NULL;
+    s=g_bs->alloc(2U,(UN)cap,&buf);
+    if(FAILED(s)||!buf){ file->close(file); root->close(root); return s; }
+
+    U64 total=0ULL;
+    while(total<cap){
+        UN chunk=(UN)((cap-total)>1024ULL*1024ULL?1024ULL*1024ULL:(cap-total));
+        s=file->read(file,&chunk,(U8*)buf+(UN)total);
+        if(FAILED(s)){ file->close(file); root->close(root); return s; }
+        if(chunk==0U) break;
+        total+=(U64)chunk;
+    }
+    file->close(file);
+    root->close(root);
+    if(total<16ULL) return EFI_ERROR_BIT|2ULL;
+
+    g_rootfs_blob=buf;
+    g_rootfs_bytes=total;
+    if(!zk_rootfs_mount(g_rootfs_blob,g_rootfs_bytes)) return EFI_ERROR_BIT|2ULL;
+
+    serial("ZORIX_ROOTFS:mounted:files=");
+    serial_u32(zk_rootfs_count());
+    serial(":bytes=");
+    serial_hex64(g_rootfs_bytes);
+    serial("\n");
     return 0;
 }
 
@@ -1598,6 +1701,12 @@ STATUS EFIAPI efi_main(HANDLE image, ST *system) {
         return s;
     }
     serial("ZORIX_KERNEL_STAGE:user-memory-prepared\n");
+
+    s = load_native_rootfs(image);
+    if (FAILED(s)) {
+        serial("ZORIX_KERNEL_ERROR:rootfs-load\n");
+        return s;
+    }
 
     s = leave_firmware(image);
     if (FAILED(s)) {
