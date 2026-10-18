@@ -318,31 +318,43 @@ zk_user_blob_start:
     decl %r15d
     jnz .Linput_loop
 
-    /* Repaint the final focused desktop after CI drag so the captured frame
-     * keeps full content instead of the simplified drag proxy. */
-    GLASS 126,92,914,650,0x142d49,138,28,12,118
-    GLASS 148,116,892,158,0x244d73,116,18,9,94
-    ROUND 170,128,184,142,0xff6b7d,240,7
-    ROUND 194,128,208,142,0xffc85a,240,7
-    ROUND 218,128,232,142,0x55dc91,240,7
-    GLASS 150,178,316,616,0x0e2339,118,22,9,70
-    GLASS 338,178,886,290,0x1b4166,112,22,11,78
-    GLASS 338,310,598,458,0x173954,104,22,10,70
-    GLASS 618,310,886,458,0x2c2a61,94,22,10,70
-    GLASS 338,478,886,610,0x112e48,106,22,10,70
-    ROUND 170,204,294,244,0x5eb8ff,54,14
-    ROUND 364,212,572,224,0x71c9ff,228,6
-    ROUND 364,244,838,252,0xd8efff,132,4
-    ROUND 364,338,570,354,0x4fe2a1,220,8
-    ROUND 644,338,854,354,0xb48aff,220,8
-    ROUND 364,506,566,522,0xffd36a,220,8
-    ROUND 364,546,842,556,0xb7d8f6,70,5
-    TEXT .Ltitle,166,137,0xf2f8ff,2
-    TEXT .Loverview,364,198,0xe9f6ff,2
-    TEXT .Lsystem,176,218,0xffffff,1
-    TEXT .Lnetwork,176,274,0xd8ebff,1
-    TEXT .Ldisplay,176,330,0xd8ebff,1
-    TEXT .Laudio,176,386,0xd8ebff,1
+    /* Restore a clean desktop before launching real apps. This avoids
+     * duplicated text/windows showing through translucent application glass. */
+    xorq %rbx, %rbx
+    movq %r12, %r10
+    shlq $32, %r10
+    orq %r13, %r10
+    movabsq $((0x102a4d << 24) | 0x07111f), %r11
+    movq $19, %rax
+    int $0x80
+
+    ROUND 40,96,430,486,0x1677d8,78,180
+    ROUND 646,34,1000,406,0x865be6,66,180
+    ROUND 490,432,930,760,0x25c6a8,48,180
+
+    GLASS 8,8,1016,48,0x11283f,102,16,10,78
+    TEXT .Lbrand,28,21,0xf5f9fc,1
+    TEXT .Lmenus,118,21,0xdfeaf2,1
+    SYMBOL 4,862,14,26,0xeaf5fb,228
+    SYMBOL 5,900,14,26,0xeaf5fb,228
+    SYMBOL 6,938,14,30,0xeaf5fb,228
+    TEXT .Lclock,976,21,0xf3f8fb,1
+
+    GLASS 284,686,740,756,0x10263c,112,24,12,92
+    ROUND 304,699,352,747,0x4eaef8,190,14
+    SYMBOL 0,312,707,32,0xffffff,245
+    ROUND 366,699,414,747,0x7a7ff4,170,14
+    SYMBOL 1,374,707,32,0xffffff,245
+    ROUND 428,699,476,747,0x27374a,210,14
+    SYMBOL 2,436,707,32,0xeef7ff,245
+    ROUND 490,699,538,747,0xe96d91,170,14
+    SYMBOL 8,498,707,32,0xffffff,245
+    ROUND 552,699,600,747,0x4fbb8b,170,14
+    SYMBOL 4,560,707,32,0xffffff,245
+    ROUND 614,699,662,747,0x6073e5,170,14
+    SYMBOL 11,622,707,32,0xffffff,245
+    ROUND 676,699,724,747,0xe9edf1,190,14
+    SYMBOL 7,684,707,32,0x26394b,245
 
     /* Present full framebuffer after final repaint. */
     xorq %rbx, %rbx
