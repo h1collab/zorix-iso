@@ -3,6 +3,10 @@
 .globl zk_settings_blob_end
 .globl zk_files_blob_start
 .globl zk_files_blob_end
+.globl zk_browser_blob_start
+.globl zk_browser_blob_end
+.globl zk_store_blob_start
+.globl zk_store_blob_end
 
 .macro APP_GLASS x0,y0,x1,y1,tint,alpha,radius,blur,border
     movabsq $((\x0 << 32) | \y0), %rbx
@@ -365,3 +369,196 @@ zk_files_blob_start:
 .Lnativefs:    .asciz "NATIVE RAMFS"
 
 zk_files_blob_end:
+
+
+/* ---------------- Browser ---------------- */
+zk_browser_blob_start:
+    movq $0, %rax
+    int $0x80
+    cmpq $102, %rax
+    jne .Lbrowser_fail
+
+    APP_GLASS 70,48,954,700,0x10243a,214,28,13,110
+    APP_ROUND 70,48,954,112,0xffffff,12,28
+    APP_ROUND 92,70,106,84,0xff5f57,240,7
+    APP_ROUND 114,70,128,84,0xfebb2e,240,7
+    APP_ROUND 136,70,150,84,0x28c840,240,7
+
+    APP_SYMBOL 3,176,62,30,0xd8e9f5,220
+    APP_ROUND 218,62,760,98,0xffffff,18,18
+    APP_TEXT .Lbrowser_url,242,73,0xeaf3f8,1
+    APP_ROUND 774,62,920,98,0xffffff,14,18
+    APP_TEXT .Lbrowser_go,824,73,0xdceaf3,1
+
+    /* Tab strip. */
+    APP_ROUND 92,126,336,166,0xffffff,18,12
+    APP_TEXT .Ltab_home,116,137,0xffffff,1
+    APP_ROUND 346,126,518,166,0xffffff,8,12
+    APP_TEXT .Ltab_docs,370,137,0xb7cbd9,1
+
+    /* Page body. */
+    APP_TEXT .Lbrowser_title,116,208,0xffffff,2
+    APP_TEXT .Lbrowser_sub,116,244,0xaec7d8,1
+
+    APP_GLASS 112,286,912,390,0x14344f,82,20,10,58
+    APP_SYMBOL 4,136,312,40,0x77d8a7,235
+    APP_TEXT .Lnetwork_ready,194,308,0xffffff,1
+    APP_TEXT .Lnetwork_detail,194,336,0x9ed4bb,1
+
+    APP_GLASS 112,410,500,592,0x173952,76,20,10,52
+    APP_SYMBOL 9,136,438,42,0x78caff,235
+    APP_TEXT .Ldev_docs,194,438,0xffffff,1
+    APP_TEXT .Ldev_docs_sub,136,484,0xb2cadd,1
+    APP_TEXT .Ldev_docs_sub2,136,512,0xb2cadd,1
+
+    APP_GLASS 524,410,912,592,0x253554,70,20,10,52
+    APP_SYMBOL 7,548,438,42,0xb99bff,235
+    APP_TEXT .Lapps_web,606,438,0xffffff,1
+    APP_TEXT .Lapps_web_sub,548,484,0xc6bde5,1
+    APP_TEXT .Lapps_web_sub2,548,512,0xc6bde5,1
+
+    APP_ROUND 112,622,912,623,0xffffff,16,1
+    APP_TEXT .Lbrowser_status,122,638,0x94acbd,1
+
+    APP_PRESENT
+    movq $3, %rbx
+    movq $16, %rax
+    int $0x80
+    movq $31, %rax
+    int $0x80
+    movq $250, %rbx
+    movq $13, %rax
+    int $0x80
+    movq $3, %rax
+    int $0x80
+    ud2
+
+.Lbrowser_fail:
+    movq $0x103, %rbx
+    movq $16, %rax
+    int $0x80
+    movq $3, %rax
+    int $0x80
+    ud2
+
+.Lbrowser_url:      .asciz "https://start.zorix"
+.Lbrowser_go:       .asciz "OPEN"
+.Ltab_home:         .asciz "START PAGE"
+.Ltab_docs:         .asciz "SDK DOCS"
+.Lbrowser_title:    .asciz "ZORIX BROWSER"
+.Lbrowser_sub:      .asciz "FAST NATIVE BROWSING FOR ZORIX"
+.Lnetwork_ready:    .asciz "NETWORK STACK READY"
+.Lnetwork_detail:   .asciz "ETHERNET / IPV4 / UDP CORE ACTIVE"
+.Ldev_docs:         .asciz "DEVELOPER"
+.Ldev_docs_sub:     .asciz "BUILD NATIVE APPS WITH"
+.Ldev_docs_sub2:    .asciz "THE ZORIX SDK AND UI ABI"
+.Lapps_web:         .asciz "WEB APPS"
+.Lapps_web_sub:     .asciz "BROWSER ENGINE SHELL"
+.Lapps_web_sub2:    .asciz "HTTP AND TLS NEXT"
+.Lbrowser_status:   .asciz "NATIVE PROCESS 102   NETWORK ONLINE"
+
+zk_browser_blob_end:
+
+/* ---------------- Zorix Store ---------------- */
+zk_store_blob_start:
+    movq $0, %rax
+    int $0x80
+    cmpq $103, %rax
+    jne .Lstore_fail
+
+    APP_GLASS 72,50,952,702,0x11253a,216,28,13,110
+    APP_ROUND 72,50,952,116,0xffffff,12,28
+    APP_ROUND 94,72,108,86,0xff5f57,240,7
+    APP_ROUND 116,72,130,86,0xfebb2e,240,7
+    APP_ROUND 138,72,152,86,0x28c840,240,7
+    APP_TEXT .Lstore_title,188,70,0xf7fbff,2
+
+    APP_ROUND 680,66,920,102,0xffffff,15,18
+    APP_SYMBOL 3,692,71,28,0xc6d9e7,220
+    APP_TEXT .Lstore_search,728,78,0xaec2d1,1
+
+    /* Category sidebar. */
+    APP_ROUND 94,136,280,670,0x071521,118,18
+    APP_TEXT .Lstore_nav,114,158,0x90a8b9,1
+    APP_ROUND 106,184,268,226,0xffffff,20,12
+    APP_SYMBOL 7,116,191,28,0x7acaff,235
+    APP_TEXT .Ldiscover,154,198,0xffffff,1
+    APP_SYMBOL 1,116,244,28,0xc8dae7,210
+    APP_TEXT .Lproductivity,154,251,0xd8e6ef,1
+    APP_SYMBOL 8,116,294,28,0xc8dae7,210
+    APP_TEXT .Lcreative,154,301,0xd8e6ef,1
+    APP_SYMBOL 2,116,344,28,0xc8dae7,210
+    APP_TEXT .Ldeveloper,154,351,0xd8e6ef,1
+
+    /* Featured content. */
+    APP_TEXT .Lfeatured,316,150,0xffffff,2
+    APP_TEXT .Lfeatured_sub,316,184,0xaac2d4,1
+
+    APP_GLASS 316,224,914,344,0x17415f,78,22,10,58
+    APP_SYMBOL 2,338,252,58,0x8fd2ff,240
+    APP_TEXT .Lterminal_name,418,248,0xffffff,1
+    APP_TEXT .Lterminal_sub,418,276,0xb7cfdf,1
+    APP_ROUND 792,258,884,294,0x5ab8ff,170,18
+    APP_TEXT .Lopen_btn,816,270,0xffffff,1
+
+    APP_GLASS 316,366,606,520,0x183c54,72,20,9,52
+    APP_SYMBOL 0,338,392,48,0x78cbff,238
+    APP_TEXT .Lfiles_name,402,392,0xffffff,1
+    APP_TEXT .Lfiles_sub,338,438,0xb7cfdf,1
+    APP_ROUND 338,468,430,502,0x5ab8ff,160,16
+    APP_TEXT .Linstalled,350,478,0xffffff,1
+
+    APP_GLASS 624,366,914,520,0x263653,68,20,9,52
+    APP_SYMBOL 1,646,392,48,0xb99bff,238
+    APP_TEXT .Lsdk_name,710,392,0xffffff,1
+    APP_TEXT .Lsdk_sub,646,438,0xc8c0e7,1
+    APP_ROUND 646,468,738,502,0x55c98f,150,16
+    APP_TEXT .Linstalled,658,478,0xffffff,1
+
+    APP_TEXT .Lupdates,316,558,0xffffff,2
+    APP_ROUND 316,598,914,654,0xffffff,10,16
+    APP_TEXT .Lup_to_date,338,615,0xb9cfde,1
+    APP_SYMBOL 4,848,608,28,0x7ee4ae,230
+
+    APP_PRESENT
+    movq $4, %rbx
+    movq $16, %rax
+    int $0x80
+    movq $32, %rax
+    int $0x80
+    movq $350, %rbx
+    movq $13, %rax
+    int $0x80
+    movq $3, %rax
+    int $0x80
+    ud2
+
+.Lstore_fail:
+    movq $0x104, %rbx
+    movq $16, %rax
+    int $0x80
+    movq $3, %rax
+    int $0x80
+    ud2
+
+.Lstore_title:      .asciz "ZORIX STORE"
+.Lstore_search:     .asciz "SEARCH APPS"
+.Lstore_nav:        .asciz "STORE"
+.Ldiscover:         .asciz "DISCOVER"
+.Lproductivity:     .asciz "PRODUCTIVITY"
+.Lcreative:         .asciz "CREATIVE"
+.Ldeveloper:        .asciz "DEVELOPER"
+.Lfeatured:         .asciz "FEATURED"
+.Lfeatured_sub:     .asciz "NATIVE APPS FOR YOUR ZORIX DESKTOP"
+.Lterminal_name:    .asciz "TERMINAL"
+.Lterminal_sub:     .asciz "NATIVE COMMAND SHELL"
+.Lopen_btn:         .asciz "OPEN"
+.Lfiles_name:       .asciz "FILES"
+.Lfiles_sub:        .asciz "BROWSE ZORIXFS AND RAMFS"
+.Lsdk_name:         .asciz "ZORIX SDK"
+.Lsdk_sub:          .asciz "HEADERS EXAMPLES AND ABI"
+.Linstalled:        .asciz "INSTALLED"
+.Lupdates:          .asciz "UPDATES"
+.Lup_to_date:       .asciz "ALL NATIVE APPS ARE UP TO DATE"
+
+zk_store_blob_end:
