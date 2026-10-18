@@ -224,6 +224,10 @@ extern U8 zk_settings_blob_start[];
 extern U8 zk_settings_blob_end[];
 extern U8 zk_files_blob_start[];
 extern U8 zk_files_blob_end[];
+extern U8 zk_browser_blob_start[];
+extern U8 zk_browser_blob_end[];
+extern U8 zk_store_blob_start[];
+extern U8 zk_store_blob_end[];
 extern U32 zk_runtime_selftest(void);
 extern U32 zk_linux_abi_selftest(void);
 extern U32 zk_installer_selftest(void);
@@ -272,6 +276,8 @@ static U8 *g_user_allocation;
 static U8 *g_user_region;
 static U8 *g_user_region_settings;
 static U8 *g_user_region_files;
+static U8 *g_user_region_browser;
+static U8 *g_user_region_store;
 static U8 *g_pt_arena;
 static UN g_pt_arena_used;
 static volatile U32 g_user_probe_ok;
@@ -496,14 +502,17 @@ static STATUS prepare_heap_and_backbuffer(void) {
 
 static STATUS prepare_user_region(void) {
     U64 raw=0;
-    STATUS s=g_bs->allocpages(0U,2U,2048U,&raw);
+    /* 16 MiB leaves alignment headroom plus five isolated 2 MiB user regions. */
+    STATUS s=g_bs->allocpages(0U,2U,4096U,&raw);
     if(FAILED(s)||!raw) return s;
     g_user_allocation=(U8*)(UN)raw;
     U64 aligned=(raw+0x1fffffULL)&~0x1fffffULL;
-    if(aligned+0x600000ULL>raw+0x800000ULL) return EFI_ERROR_BIT|9ULL;
+    if(aligned+0xA00000ULL>raw+0x1000000ULL) return EFI_ERROR_BIT|9ULL;
     g_user_region=(U8*)(UN)aligned;
     g_user_region_settings=g_user_region+0x200000U;
     g_user_region_files=g_user_region+0x400000U;
+    g_user_region_browser=g_user_region+0x600000U;
+    g_user_region_store=g_user_region+0x800000U;
 
     U64 pt_raw=0;
     s=g_bs->allocpages(0U,2U,64U,&pt_raw);
@@ -769,9 +778,9 @@ static U32 build_zorix_page_tables(U64 user_base) {
         serial("\n");
     }
 
-    /* Replace three 2 MiB kernel mappings with 4 KiB user mappings:
-     * Glass shell, Settings and Files. */
-    for(U32 region=0;region<3U;++region){
+    /* Replace five 2 MiB kernel mappings with 4 KiB user mappings:
+     * Glass shell, Settings, Files, Browser and Store. */
+    for(U32 region=0;region<5U;++region){
         U64 base=user_base+(U64)region*0x200000ULL;
         U64 *pd=ensure_pd(pml4,base,1U);
         if(!pd) return 0U;
@@ -1085,7 +1094,7 @@ static U64 syscall_dispatch(U64 nr, U64 arg0, U64 arg1, U64 arg2) {
     if (nr == ZK_SYS_YIELD) return 0U;
     if (nr == ZK_SYS_GETPID) return 1U;
     if (nr == ZK_SYS_CLOCK_TICKS) return zk_timer_ticks;
-    if (nr == ZK_SYS_ABI_VERSION) return 0x00050000ULL;
+    if (nr == ZK_SYS_ABI_VERSION) return 0x00060000ULL;
     return ~0ULL;
 }
 
@@ -1094,7 +1103,7 @@ static void syscall_selftest(void) {
     U64 pid = syscall_dispatch(ZK_SYS_GETPID,0,0,0);
     U64 abi = syscall_dispatch(ZK_SYS_ABI_VERSION,0,0,0);
     U64 clock = syscall_dispatch(ZK_SYS_CLOCK_TICKS,0,0,0);
-    if (pid == 1U && abi == 0x00050000ULL && clock >= before &&
+    if (pid == 1U && abi == 0x00060000ULL && clock >= before &&
         syscall_dispatch(0xffffU,0,0,0) == ~0ULL) {
         serial("ZORIX_KERNEL_SYSCALL:native-abi-dispatch-ok\n");
     } else {
@@ -1197,13 +1206,15 @@ static U32 user_ptr_ok_for_current_process(U64 p) {
     if(g_current_pid==42U) base=(U64)(UN)g_user_region;
     else if(g_current_pid==100U) base=(U64)(UN)g_user_region_settings;
     else if(g_current_pid==101U) base=(U64)(UN)g_user_region_files;
+    else if(g_current_pid==102U) base=(U64)(UN)g_user_region_browser;
+    else if(g_current_pid==103U) base=(U64)(UN)g_user_region_store;
     if(!base) return 0U;
     return p>=base && p<base+0x200000ULL;
 }
 
 __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1, U64 arg2) {
     if (nr == 0U) return g_current_pid;
-    if (nr == 1U) return 0x00050000ULL;
+    if (nr == 1U) return 0x00060000ULL;
     if (nr == 2U) return zk_timer_ticks;
     if (nr == 3U) return 0U;
     if (nr == 4U) {
@@ -1540,7 +1551,7 @@ STATUS EFIAPI efi_main(HANDLE image, ST *system) {
 
     if (!g_bs) return EFI_ERROR_BIT | 2ULL;
 
-    uefi_print(L"\r\nZorix Kernel 0.5 - native desktop integration\r\n");
+    uefi_print(L"\r\nZorix Kernel 0.6 - native desktop integration\r\n");
     uefi_print(L"Independent native kernel; no Linux kernel is loaded.\r\n");
 
     STATUS s = g_bs->locate(&gop_guid, NULL, (void**)&g_gop);
