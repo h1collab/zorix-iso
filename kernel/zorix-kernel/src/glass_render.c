@@ -290,6 +290,24 @@ void zr_symbol(U32 *fb,U32 stride,U32 width,U32 height,U32 format,
         zr_line(fb,stride,width,height,format,(int)x+s/4,(int)y+s*2/3,(int)x+s*2/5,(int)y+s/2,t,color,alpha);
         zr_line(fb,stride,width,height,format,(int)x+s*2/5,(int)y+s/2,(int)x+s*3/4,(int)y+s*3/4,t,color,alpha);
         break;
+    case 9: /* document */
+        zr_round(fb,stride,width,height,format,x+s/4,y+s/6,x+s*3/4,y+s*5/6,color,(U8)(alpha/5U),s/12);
+        zr_line(fb,stride,width,height,format,(int)x+s/3,(int)y+s*2/5,(int)x+s*2/3,(int)y+s*2/5,t,color,alpha);
+        zr_line(fb,stride,width,height,format,(int)x+s/3,(int)y+s/2,(int)x+s*2/3,(int)y+s/2,t,color,(U8)(alpha*3U/4U));
+        zr_line(fb,stride,width,height,format,(int)x+s/3,(int)y+s*3/5,(int)x+s*3/5,(int)y+s*3/5,t,color,(U8)(alpha/2U));
+        break;
+    case 10: /* home */
+        zr_line(fb,stride,width,height,format,cx-s/3,cy,cx,cy-s/3,t,color,alpha);
+        zr_line(fb,stride,width,height,format,cx,cy-s/3,cx+s/3,cy,t,color,alpha);
+        zr_line(fb,stride,width,height,format,cx-s/4,cy-s/12,cx-s/4,cy+s/3,t,color,alpha);
+        zr_line(fb,stride,width,height,format,cx+s/4,cy-s/12,cx+s/4,cy+s/3,t,color,alpha);
+        zr_line(fb,stride,width,height,format,cx-s/4,cy+s/3,cx+s/4,cy+s/3,t,color,alpha);
+        break;
+    case 11: /* display */
+        zr_round(fb,stride,width,height,format,x+s/6,y+s/5,x+s*5/6,y+s*2/3,color,(U8)(alpha/5U),s/12);
+        zr_line(fb,stride,width,height,format,cx,cy+s/6,cx,cy+s/3,t,color,alpha);
+        zr_line(fb,stride,width,height,format,cx-s/6,cy+s/3,cx+s/6,cy+s/3,t,color,alpha);
+        break;
     default:
         zr_dot(fb,stride,width,height,format,cx,cy,s/5,color,alpha);
         break;
