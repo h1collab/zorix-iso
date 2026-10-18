@@ -354,6 +354,21 @@ static U32 g_glass_render_features;
 static void *g_rootfs_blob;
 static U64 g_rootfs_bytes;
 
+#ifdef ZORIX_BIOS
+/* The BIOS ELF is loaded independently of the EFI application. All of these
+ * regions are BSS: no UEFI allocator or boot services are needed. */
+static U8 g_bios_heap[HEAP_BYTES];
+static U8 g_bios_user_memory[0xC00000U];
+static U8 g_bios_pt_memory[64U * 4096U + 4096U];
+static EFI_DESC g_bios_memory_map[128];
+static GOPINFO g_bios_gop_info;
+static GOPMODE g_bios_gop_mode;
+static GOP g_bios_gop;
+#define ZK_SYSCALL_ABI
+#else
+#define ZK_SYSCALL_ABI __attribute__((ms_abi))
+#endif
+
 static void uefi_print(CHAR16 *s) {
     if (g_st && g_st->out && g_st->out->print) g_st->out->print(g_st->out, s);
 }
@@ -1315,7 +1330,7 @@ static U32 user_ptr_ok_for_current_process(U64 p) {
     return p>=base && p<base+0x200000ULL;
 }
 
-__attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1, U64 arg2) {
+ZK_SYSCALL_ABI U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1, U64 arg2) {
     if (nr == 0U) return g_current_pid;
     if (nr == 1U) return 0x00070000ULL;
     if (nr == 2U) return zk_timer_ticks;
@@ -1675,6 +1690,7 @@ STATUS EFIAPI efi_main(HANDLE image, ST *system) {
     g_bs = system ? system->bs : NULL;
     serial_init();
     serial("ZORIX_KERNEL_STAGE:efi-entry\n");
+    serial("ZORIX_BOOT:uefi-entry\n");
 
     if (!g_bs) return EFI_ERROR_BIT | 2ULL;
 
@@ -1718,3 +1734,140 @@ STATUS EFIAPI efi_main(HANDLE image, ST *system) {
     kernel_main();
     return 0;
 }
+
+#ifdef ZORIX_BIOS
+/* Multiboot2 is passed by GRUB in protected mode; bios_entry.S switches to
+ * our long-mode tables before entering this SysV C entrypoint.
+ * BIOS firmware services must not be invoked after this point. */
+static U32 mb_u32(const U8 *p) {
+    return (U32)p[0] | ((U32)p[1] << 8) | ((U32)p[2] << 16) | ((U32)p[3] << 24);
+}
+static U64 mb_u64(const U8 *p) {
+    return (U64)mb_u32(p) | ((U64)mb_u32(p+4) << 32);
+}
+
+static U32 bios_multiboot_init(U32 magic, U32 mbi) {
+    if (magic != 0x36d76289U || mbi < 4096U) return 0U;
+    const U8 *info=(const U8*)(UN)mbi;
+    U32 bytes=mb_u32(info);
+    if(bytes<16U || bytes>(16U*1024U*1024U)) return 0U;
+
+    const U8 *zpk=NULL;
+    U64 zpk_size=0;
+    U32 got_fb=0U;
+    U32 mem_entries=0U;
+    for(U32 off=8U;off+8U<=bytes;){
+        const U8 *tag=info+off;
+        U32 type=mb_u32(tag);
+        U32 size=mb_u32(tag+4);
+        if(size<8U || size>bytes-off) return 0U;
+        if(type==0U) break;
+        if(type==3U && size>=16U) {
+            U32 start=mb_u32(tag+8),end=mb_u32(tag+12);
+            if(start>=0x100000U && end>start) {
+                const U8 *candidate=(const U8*)(UN)start;
+                if(end-start>=16U &&
+                   candidate[0]=='Z' && candidate[1]=='O' &&
+                   candidate[2]=='R' && candidate[3]=='I' &&
+                   candidate[4]=='X' && candidate[5]=='P' &&
+                   candidate[6]=='K' && candidate[7]=='1'){
+                    zpk=candidate;
+                    zpk_size=(U64)end-(U64)start;
+                }
+            }
+        }
+        if(type==8U && size>=38U && tag[29]==1U && tag[28]==32U) {
+            U64 addr=mb_u64(tag+8);
+            U32 pitch=mb_u32(tag+16);
+            U32 width=mb_u32(tag+20), height=mb_u32(tag+24);
+            U32 red=tag[32],green=tag[34],blue=tag[36];
+            U64 fbsize=(U64)pitch*(U64)height;
+            if(addr>=0x100000ULL && addr+fbsize<=0x100000000ULL &&
+               width>=640U && height>=480U && width<=4096U && height<=2160U &&
+               pitch>=width*4U && (pitch&3U)==0U &&
+               ((red==16U&&green==8U&&blue==0U) ||
+                (red==0U&&green==8U&&blue==16U))) {
+                g_bios_gop_info.width=width;
+                g_bios_gop_info.height=height;
+                g_bios_gop_info.stride=pitch/4U;
+                g_bios_gop_info.format=(red==0U)?0U:1U;
+                g_bios_gop_mode.info=&g_bios_gop_info;
+                g_bios_gop_mode.fb=addr;
+                g_bios_gop_mode.fbsize=fbsize;
+                g_bios_gop.mode=&g_bios_gop_mode;
+                g_gop=&g_bios_gop;
+                got_fb=1U;
+            }
+        }
+        if(type==6U && size>=16U) {
+            U32 entry_size=mb_u32(tag+8);
+            if(entry_size>=24U && entry_size<=128U) {
+                for(U32 pos=16U;pos+entry_size<=size && mem_entries<128U;pos+=entry_size){
+                    const U8 *e=tag+pos;
+                    U64 base=mb_u64(e), length=mb_u64(e+8);
+                    U32 kind=mb_u32(e+16);
+                    EFI_DESC *desc=&g_bios_memory_map[mem_entries++];
+                    desc->physical=base;
+                    desc->virtual_addr=0ULL;
+                    desc->pages=length>>12;
+                    desc->attributes=0ULL;
+                    desc->type=(kind==1U)?7U:0U;
+                    desc->pad=0U;
+                }
+            }
+        }
+        U32 step=(size+7U)&~7U;
+        if(!step || step>bytes-off) return 0U;
+        off+=step;
+    }
+
+    if(!zpk||!got_fb||mem_entries==0U) return 0U;
+    g_memmap=g_bios_memory_map;
+    g_memmap_size=(UN)mem_entries*sizeof(EFI_DESC);
+    g_desc_size=sizeof(EFI_DESC);
+    g_desc_version=0U;
+
+    g_heap=g_bios_heap;
+    g_heap_size=(UN)sizeof(g_bios_heap);
+    g_heap_used=0U;
+    g_backbuffer_bytes=(UN)g_bios_gop_info.stride*(UN)g_bios_gop_info.height*4U;
+    g_backbuffer=(U32*)heap_alloc(g_backbuffer_bytes,64U);
+    if(!g_backbuffer) return 0U;
+
+    U64 user=((U64)(UN)g_bios_user_memory+0x1fffffULL)&~0x1fffffULL;
+    if(user+0xA00000ULL>(U64)(UN)g_bios_user_memory+sizeof(g_bios_user_memory))return 0U;
+    g_user_region=(U8*)(UN)user;
+    g_user_region_settings=g_user_region+0x200000U;
+    g_user_region_files=g_user_region+0x400000U;
+    g_user_region_browser=g_user_region+0x600000U;
+    g_user_region_store=g_user_region+0x800000U;
+    U64 pt=((U64)(UN)g_bios_pt_memory+0xfffULL)&~0xfffULL;
+    g_pt_arena=(U8*)(UN)pt;
+    g_pt_arena_used=0U;
+
+    g_rootfs_blob=(void*)zpk;
+    g_rootfs_bytes=zpk_size;
+    if(!zk_rootfs_mount(g_rootfs_blob,g_rootfs_bytes))return 0U;
+    serial("ZORIX_ROOTFS:mounted:files=");
+    serial_u32(zk_rootfs_count());
+    serial(":bytes=");
+    serial_hex64(g_rootfs_bytes);
+    serial("\n");
+    serial("ZORIX_KERNEL_STAGE:gop-ready\n");
+    serial("ZORIX_KERNEL_STAGE:desktop-memory-prepared\n");
+    serial("ZORIX_KERNEL_STAGE:user-memory-prepared\n");
+    serial("ZORIX_KERNEL_STAGE:boot-services-exited\n");
+    return 1U;
+}
+
+void zk_bios_entry(U32 magic, U32 mbi) {
+    serial_init();
+    serial("ZORIX_BOOT:bios-entry\n");
+    serial("ZORIX_BOOT:long-mode\n");
+    if(!bios_multiboot_init(magic,mbi)){
+        serial("ZORIX_KERNEL_ERROR:bios-multiboot-handoff\n");
+        for(;;)zk_hlt();
+    }
+    kernel_main();
+}
+#endif
