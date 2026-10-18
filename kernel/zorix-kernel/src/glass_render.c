@@ -171,18 +171,127 @@ void zr_text(U32 *fb,U32 stride,U32 width,U32 height,U32 format,
         for(U32 gy=0;gy<7U;++gy){
             U8 bits=zr_glyph(ch,gy);
             for(U32 gx=0;gx<5U;++gx){
-                if(bits&(1U<<(4U-gx))){
-                    U32 px=cursor+gx*scale,py=y+gy*scale;
-                    if(px<width&&py<height){
-                        for(U32 sy=0;sy<scale&&py+sy<height;++sy){
-                            U32 *row=fb+(UN)(py+sy)*stride;
-                            for(U32 sx=0;sx<scale&&px+sx<width;++sx)
-                                row[px+sx]=zr_blend(row[px+sx],format,r,g,b,238U);
+                if(!(bits&(1U<<(4U-gx)))) continue;
+                U32 px=cursor+gx*scale,py=y+gy*scale;
+                /* Soft edge halo makes the tiny built-in face read like a
+                 * regular UI font instead of raw framebuffer blocks. */
+                if(px>0U&&py>0U&&px+scale+1U<width&&py+scale+1U<height){
+                    for(U32 yy=py-1U;yy<=py+scale;++yy){
+                        U32 *row=fb+(UN)yy*stride;
+                        for(U32 xx=px-1U;xx<=px+scale;++xx){
+                            U32 edge=(xx<px||xx>=px+scale||yy<py||yy>=py+scale);
+                            row[xx]=zr_blend(row[xx],format,r,g,b,(U8)(edge?48U:235U));
                         }
                     }
                 }
             }
         }
         cursor+=6U*scale;
+    }
+}
+
+static void zr_dot(U32 *fb,U32 stride,U32 width,U32 height,U32 format,
+                   int cx,int cy,int radius,U32 color,U8 alpha){
+    U8 r=(U8)(color>>16),g=(U8)(color>>8),b=(U8)color;
+    int rr=radius*radius;
+    for(int y=cy-radius;y<=cy+radius;++y){
+        if(y<0||(U32)y>=height)continue;
+        U32 *row=fb+(UN)(U32)y*stride;
+        for(int x=cx-radius;x<=cx+radius;++x){
+            if(x<0||(U32)x>=width)continue;
+            int dx=x-cx,dy=y-cy;
+            int d=dx*dx+dy*dy;
+            if(d<=rr) row[x]=zr_blend(row[x],format,r,g,b,alpha);
+            else if(d<=rr+radius+1) row[x]=zr_blend(row[x],format,r,g,b,(U8)(alpha/4U));
+        }
+    }
+}
+
+static void zr_line(U32 *fb,U32 stride,U32 width,U32 height,U32 format,
+                    int x0,int y0,int x1,int y1,int thick,U32 color,U8 alpha){
+    int dx=x1-x0;if(dx<0)dx=-dx;
+    int sx=x0<x1?1:-1;
+    int dy=y1-y0;if(dy>0)dy=-dy;
+    int sy=y0<y1?1:-1;
+    int err=dx+dy;
+    for(;;){
+        zr_dot(fb,stride,width,height,format,x0,y0,thick,color,alpha);
+        if(x0==x1&&y0==y1)break;
+        int e2=2*err;
+        if(e2>=dy){err+=dy;x0+=sx;}
+        if(e2<=dx){err+=dx;y0+=sy;}
+    }
+}
+
+void zr_symbol(U32 *fb,U32 stride,U32 width,U32 height,U32 format,
+               U32 id,U32 x,U32 y,U32 size,U32 color,U8 alpha){
+    if(!fb||size<12U)return;
+    int cx=(int)(x+size/2U),cy=(int)(y+size/2U);
+    int s=(int)size;
+    int t=s/18;if(t<1)t=1;
+
+    switch(id){
+    case 0: /* files / folder */
+        zr_line(fb,stride,width,height,format,(int)x+s/5,(int)y+s/3,(int)x+s*2/5,(int)y+s/3,t,color,alpha);
+        zr_line(fb,stride,width,height,format,(int)x+s*2/5,(int)y+s/3,(int)x+s/2,(int)y+s*2/5,t,color,alpha);
+        zr_line(fb,stride,width,height,format,(int)x+s/5,(int)y+s*2/5,(int)x+s*4/5,(int)y+s*2/5,t,color,alpha);
+        zr_line(fb,stride,width,height,format,(int)x+s/5,(int)y+s*2/5,(int)x+s/4,(int)y+s*3/4,t,color,alpha);
+        zr_line(fb,stride,width,height,format,(int)x+s/4,(int)y+s*3/4,(int)x+s*3/4,(int)y+s*3/4,t,color,alpha);
+        zr_line(fb,stride,width,height,format,(int)x+s*3/4,(int)y+s*3/4,(int)x+s*4/5,(int)y+s*2/5,t,color,alpha);
+        break;
+    case 1: /* settings gear */
+        zr_dot(fb,stride,width,height,format,cx,cy,s/4,color,(U8)(alpha/2U));
+        zr_dot(fb,stride,width,height,format,cx,cy,s/9,0x0b1727U,220U);
+        for(int k=0;k<8;++k){
+            static const int vx[8]={0,7,10,7,0,-7,-10,-7};
+            static const int vy[8]={-10,-7,0,7,10,7,0,-7};
+            zr_line(fb,stride,width,height,format,cx+vx[k]*s/48,cy+vy[k]*s/48,
+                    cx+vx[k]*s/32,cy+vy[k]*s/32,t,color,alpha);
+        }
+        break;
+    case 2: /* terminal */
+        zr_line(fb,stride,width,height,format,(int)x+s/4,(int)y+s/3,(int)x+s*2/5,(int)y+s/2,t,color,alpha);
+        zr_line(fb,stride,width,height,format,(int)x+s*2/5,(int)y+s/2,(int)x+s/4,(int)y+s*2/3,t,color,alpha);
+        zr_line(fb,stride,width,height,format,(int)x+s/2,(int)y+s*2/3,(int)x+s*3/4,(int)y+s*2/3,t,color,alpha);
+        break;
+    case 3: /* search */
+        zr_dot(fb,stride,width,height,format,cx-s/10,cy-s/10,s/5,color,(U8)(alpha/5U));
+        zr_dot(fb,stride,width,height,format,cx-s/10,cy-s/10,s/7,0x0b1727U,220U);
+        zr_line(fb,stride,width,height,format,cx+s/20,cy+s/20,cx+s/4,cy+s/4,t,color,alpha);
+        break;
+    case 4: /* network/wifi */
+        zr_dot(fb,stride,width,height,format,cx,cy+s/5,t+1,color,alpha);
+        zr_line(fb,stride,width,height,format,cx-s/5,cy,cx,cy-s/8,t,color,(U8)(alpha*3U/4U));
+        zr_line(fb,stride,width,height,format,cx,cy-s/8,cx+s/5,cy,t,color,(U8)(alpha*3U/4U));
+        zr_line(fb,stride,width,height,format,cx-s/3,cy-s/6,cx,cy-s/3,t,color,(U8)(alpha/2U));
+        zr_line(fb,stride,width,height,format,cx,cy-s/3,cx+s/3,cy-s/6,t,color,(U8)(alpha/2U));
+        break;
+    case 5: /* volume */
+        zr_line(fb,stride,width,height,format,(int)x+s/4,cy,(int)x+s*2/5,cy,t,color,alpha);
+        zr_line(fb,stride,width,height,format,(int)x+s*2/5,cy,cx,cy-s/6,t,color,alpha);
+        zr_line(fb,stride,width,height,format,cx,cy-s/6,cx,cy+s/6,t,color,alpha);
+        zr_line(fb,stride,width,height,format,cx,cy+s/6,(int)x+s*2/5,cy,t,color,alpha);
+        zr_line(fb,stride,width,height,format,cx+s/12,cy-s/7,cx+s/6,cy,t,color,(U8)(alpha*3U/4U));
+        zr_line(fb,stride,width,height,format,cx+s/6,cy,cx+s/12,cy+s/7,t,color,(U8)(alpha*3U/4U));
+        break;
+    case 6: /* battery */
+        zr_round(fb,stride,width,height,format,x+s/5,y+s/3,x+s*4/5,y+s*2/3,color,(U8)(alpha/5U),s/12);
+        zr_round(fb,stride,width,height,format,x+s/4,y+s*2/5,x+s*7/10,y+s*3/5,color,alpha,s/16);
+        zr_round(fb,stride,width,height,format,x+s*4/5,y+s*5/12,x+s*17/20,y+s*7/12,color,alpha,s/24);
+        break;
+    case 7: /* grid/apps */
+        for(int yy=0;yy<2;++yy)for(int xx=0;xx<2;++xx)
+            zr_round(fb,stride,width,height,format,x+s/4+(U32)xx*s/4,y+s/4+(U32)yy*s/4,
+                     x+s/4+(U32)xx*s/4+s/7,y+s/4+(U32)yy*s/4+s/7,color,alpha,s/18);
+        break;
+    case 8: /* image/photos */
+        zr_round(fb,stride,width,height,format,x+s/5,y+s/5,x+s*4/5,y+s*4/5,color,(U8)(alpha/6U),s/10);
+        zr_dot(fb,stride,width,height,format,(int)x+s*2/3,(int)y+s/3,s/14,color,alpha);
+        zr_line(fb,stride,width,height,format,(int)x+s/4,(int)y+s*2/3,(int)x+s*2/5,(int)y+s/2,t,color,alpha);
+        zr_line(fb,stride,width,height,format,(int)x+s*2/5,(int)y+s/2,(int)x+s*3/4,(int)y+s*3/4,t,color,alpha);
+        break;
+    default:
+        zr_dot(fb,stride,width,height,format,cx,cy,s/5,color,alpha);
+        break;
     }
 }
