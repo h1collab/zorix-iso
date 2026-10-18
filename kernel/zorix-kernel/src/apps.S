@@ -158,6 +158,9 @@ zk_settings_blob_start:
     int $0x80
     movq $27, %rax
     int $0x80
+    movq $250, %rbx
+    movq $13, %rax
+    int $0x80
     movq $3, %rax
     int $0x80
     ud2
@@ -331,6 +334,9 @@ zk_files_blob_start:
     movq $16, %rax
     int $0x80
     movq $28, %rax
+    int $0x80
+    movq $250, %rbx
+    movq $13, %rax
     int $0x80
     movq $3, %rax
     int $0x80
