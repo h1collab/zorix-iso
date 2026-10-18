@@ -45,6 +45,14 @@
     int $0x80
 .endm
 
+.macro SYMBOL id,x,y,size,color,alpha
+    movq $\id, %rbx
+    movabsq $((\x << 32) | \y), %r10
+    movabsq $((\size << 32) | (\alpha << 24) | \color), %r11
+    movq $30, %rax
+    int $0x80
+.endm
+
 zk_user_blob_start:
     movw %cs, %ax
     andl $3, %eax
@@ -103,71 +111,79 @@ zk_user_blob_start:
     movq $19, %rax
     int $0x80
 
-    /* Soft aurora lights behind the glass. */
-    ROUND 58,100,410,452,0x157efb,92,150
-    ROUND 650,54,1000,404,0x9b5cff,78,150
-    ROUND 520,430,900,760,0x23d7b2,58,150
+    /* Soft tide-like wallpaper lights. */
+    ROUND 40,96,430,486,0x1677d8,78,180
+    ROUND 646,34,1018,406,0x865be6,66,180
+    ROUND 490,432,930,790,0x25c6a8,48,180
 
-    /* Frosted menu bar and side rail. */
-    GLASS 14,12,1010,58,0x183453,118,18,10,100
-    GLASS 14,76,70,368,0x102b46,132,22,10,90
+    /* System menu bar. */
+    GLASS 8,8,1016,48,0x11283f,102,16,10,78
+    TEXT .Lbrand,28,21,0xf5f9fc,1
+    TEXT .Lmenus,118,21,0xdfeaf2,1
+    SYMBOL 4,862,14,26,0xeaf5fb,228
+    SYMBOL 5,900,14,26,0xeaf5fb,228
+    SYMBOL 6,938,14,30,0xeaf5fb,228
+    TEXT .Lclock,976,21,0xf3f8fb,1
 
-    /* Main floating Glass window. */
-    GLASS 126,92,914,650,0x142d49,138,28,12,118
-    GLASS 148,116,892,158,0x244d73,106,18,9,82
+    /* A quiet desktop workspace preview behind apps. */
+    GLASS 138,92,886,628,0x122a42,104,28,12,86
+    ROUND 138,92,886,150,0xffffff,10,28
+    ROUND 160,114,174,128,0xff5f57,238,7
+    ROUND 182,114,196,128,0xfebb2e,238,7
+    ROUND 204,114,218,128,0x28c840,238,7
+    TEXT .Lworkspace,246,111,0xf2f8fc,2
 
-    /* Traffic-light controls with real alpha/rounding. */
-    ROUND 170,128,184,142,0xff6b7d,240,7
-    ROUND 194,128,208,142,0xffc85a,240,7
-    ROUND 218,128,232,142,0x55dc91,240,7
+    /* Sidebar uses icons + labels rather than decorative blocks. */
+    ROUND 156,170,304,596,0x071521,62,18
+    ROUND 168,190,292,230,0xffffff,18,12
+    SYMBOL 10,176,196,26,0x72c9ff,235
+    TEXT .Lhome,210,202,0xffffff,1
+    SYMBOL 0,176,248,26,0xc8dce9,210
+    TEXT .Lfiles,210,254,0xdbe8f1,1
+    SYMBOL 1,176,300,26,0xc8dce9,210
+    TEXT .Lsettings,210,306,0xdbe8f1,1
+    SYMBOL 2,176,352,26,0xc8dce9,210
+    TEXT .Lterminal,210,358,0xdbe8f1,1
 
-    /* Sidebar and translucent cards. */
-    GLASS 150,178,316,616,0x0e2339,118,22,9,70
-    GLASS 338,178,886,290,0x1b4166,112,22,11,78
-    GLASS 338,310,598,458,0x173954,104,22,10,70
-    GLASS 618,310,886,458,0x2c2a61,94,22,10,70
-    GLASS 338,478,886,610,0x112e48,106,22,10,70
+    /* Content hierarchy, kept light so native apps can sit above it. */
+    TEXT .Lwelcome,334,184,0xffffff,2
+    TEXT .Lsubtitle,334,218,0xa9c2d4,1
+    GLASS 334,260,850,358,0x18405f,72,20,9,54
+    SYMBOL 11,356,282,44,0x80d0ff,230
+    TEXT .Ldisplaycard,416,286,0xf4f9fc,1
+    TEXT .Ldisplaydetail,416,312,0xadd0e7,1
+    GLASS 334,378,586,512,0x173c54,66,20,9,48
+    SYMBOL 4,354,401,40,0x7fe8b1,230
+    TEXT .Lnetworkcard,408,405,0xf4f9fc,1
+    TEXT .Lonlinetxt,408,432,0x96dab9,1
+    GLASS 606,378,850,512,0x253456,62,20,9,48
+    SYMBOL 5,626,401,40,0xb6a0ff,230
+    TEXT .Laudiocard,680,405,0xf4f9fc,1
+    TEXT .Laudiotxt,680,432,0xcabdf4,1
 
-    /* Sidebar selections and content accents. */
-    ROUND 170,204,294,244,0x5eb8ff,54,14
-    ROUND 170,260,294,300,0xffffff,18,14
-    ROUND 170,316,294,356,0xffffff,14,14
-    ROUND 170,372,294,412,0xffffff,12,14
+    /* Floating app dock with semantic symbols. */
+    GLASS 284,686,740,756,0x10263c,112,24,12,92
 
-    ROUND 364,212,572,224,0x71c9ff,228,6
-    ROUND 364,244,838,252,0xd8efff,132,4
-    ROUND 364,338,570,354,0x4fe2a1,220,8
-    ROUND 644,338,854,354,0xb48aff,220,8
-    ROUND 366,390,566,428,0x7ab8ed,42,14
-    ROUND 646,390,846,428,0xa28cff,38,14
-    ROUND 364,506,566,522,0xffd36a,220,8
-    ROUND 364,546,842,556,0xb7d8f6,70,5
-    ROUND 364,574,760,584,0x9ec7ed,52,5
+    ROUND 304,699,352,747,0x4eaef8,190,14
+    SYMBOL 0,312,707,32,0xffffff,245
 
-    /* Glass launcher capsules. */
-    GLASS 18,84,66,132,0x1e73b9,132,16,7,80
-    GLASS 18,142,66,190,0x159a71,126,16,7,80
-    GLASS 18,200,66,248,0xa66d17,122,16,7,80
-    GLASS 18,258,66,306,0x7449b6,122,16,7,80
+    ROUND 366,699,414,747,0x7a7ff4,170,14
+    SYMBOL 1,374,707,32,0xffffff,245
 
-    /* Bottom floating dock. */
-    GLASS 252,688,772,758,0x152f4b,126,24,12,112
-    ROUND 278,704,322,748,0x249cf0,225,13
-    ROUND 340,704,384,748,0x36d58b,225,13
-    ROUND 402,704,446,748,0xffb84f,225,13
-    ROUND 464,704,508,748,0x9b72ef,225,13
-    ROUND 526,704,570,748,0xff6688,225,13
-    ROUND 588,704,632,748,0x45ced0,225,13
-    ROUND 650,704,694,748,0xeaf6ff,225,13
+    ROUND 428,699,476,747,0x27374a,210,14
+    SYMBOL 2,436,707,32,0xeef7ff,245
 
-    /* Native bitmap typography rendered in CPL3 through the Glass ABI. */
-    TEXT .Ltitle,166,137,0xf2f8ff,2
-    TEXT .Loverview,364,198,0xe9f6ff,2
-    TEXT .Lsystem,176,218,0xffffff,1
-    TEXT .Lnetwork,176,274,0xd8ebff,1
-    TEXT .Ldisplay,176,330,0xd8ebff,1
-    TEXT .Laudio,176,386,0xd8ebff,1
-    TEXT .Lstatus,796,31,0xdff6ff,1
+    ROUND 490,699,538,747,0xe96d91,170,14
+    SYMBOL 8,498,707,32,0xffffff,245
+
+    ROUND 552,699,600,747,0x4fbb8b,170,14
+    SYMBOL 4,560,707,32,0xffffff,245
+
+    ROUND 614,699,662,747,0x6073e5,170,14
+    SYMBOL 11,622,707,32,0xffffff,245
+
+    ROUND 676,699,724,747,0xe9edf1,190,14
+    SYMBOL 7,684,707,32,0x26394b,245
 
     /* Prove all liquid-glass primitives were exercised. */
     movq $23, %rax
@@ -352,6 +368,23 @@ zk_user_blob_start:
     movq $3, %rax
     int $0x80
     ud2
+
+.Lbrand:         .asciz "ZORIX"
+.Lmenus:         .asciz "FILES   EDIT   VIEW   GO   WINDOW   HELP"
+.Lclock:         .asciz "08:33"
+.Lworkspace:     .asciz "ZORIX DESKTOP"
+.Lhome:          .asciz "HOME"
+.Lfiles:         .asciz "FILES"
+.Lsettings:      .asciz "SETTINGS"
+.Lterminal:      .asciz "TERMINAL"
+.Lwelcome:       .asciz "WELCOME BACK"
+.Lsubtitle:      .asciz "YOUR NATIVE WORKSPACE IS READY"
+.Ldisplaycard:   .asciz "DISPLAY"
+.Ldisplaydetail: .asciz "144 HZ LIQUID GLASS"
+.Lnetworkcard:   .asciz "NETWORK"
+.Lonlinetxt:     .asciz "CONNECTED"
+.Laudiocard:     .asciz "SOUND"
+.Laudiotxt:      .asciz "48 KHZ OUTPUT"
 
 .Ltitle:    .asciz "ZORIX GLASS"
 .Loverview: .asciz "OVERVIEW"
