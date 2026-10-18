@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'kernel/zorix-kernel/**'
+      - 'sdk/**'
       - '.github/workflows/zorix-kernel-native.yml'
   workflow_dispatch: {}
 
@@ -24,7 +25,7 @@ jobs:
       - name: Install toolchain and QEMU
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq clang lld qemu-system-x86 ovmf dosfstools mtools socat imagemagick
+          sudo apt-get install -y -qq clang lld qemu-system-x86 ovmf dosfstools mtools socat imagemagick xorriso
 
       - name: Build independent Zorix Kernel EFI image
         run: |
@@ -44,6 +45,9 @@ jobs:
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/wireless.c -o out/wireless.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/glass_render.c -o out/glass_render.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/ui_font.c -o out/ui_font.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -mno-red-zone -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -I sdk/include -c sdk/examples/hello.c -o out/sdk-hello.obj
+          test -s out/sdk-hello.obj
+          echo 'ZORIX_SDK:example-build-ok'
           lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj out/apps.obj out/runtime.obj out/linux_abi.obj out/installer.obj out/driver_core.obj out/zorixfs.obj out/net_stack.obj out/audio.obj out/wireless.obj out/glass_render.obj out/ui_font.obj
           test -s out/ZORIXKERNEL.EFI
           sha256sum out/ZORIXKERNEL.EFI
@@ -56,6 +60,22 @@ jobs:
           mmd -i out/esp.img ::EFI
           mmd -i out/esp.img ::EFI/BOOT
           mcopy -i out/esp.img out/ZORIXKERNEL.EFI ::EFI/BOOT/BOOTX64.EFI
+
+      - name: Build bootable native Zorix ISO
+        run: |
+          set -euxo pipefail
+          mkdir -p out/iso-root
+          cp out/esp.img out/iso-root/esp.img
+          mkdir -p out/iso-root/SDK
+          cp -r sdk/include out/iso-root/SDK/include
+          cp -r sdk/examples out/iso-root/SDK/examples
+          cp sdk/README.md out/iso-root/SDK/README.md
+          xorriso -as mkisofs -R -J -V ZORIX_NATIVE_06 \
+            -eltorito-alt-boot -e esp.img -no-emul-boot \
+            -o out/ZorixOS-Native-0.6.iso out/iso-root
+          test -s out/ZorixOS-Native-0.6.iso
+          sha256sum out/ZorixOS-Native-0.6.iso
+
 
       - name: Boot Zorix Kernel in QEMU OVMF
         shell: bash
@@ -72,8 +92,55 @@ jobs:
           truncate -s 64M out/nvme.img
           : > out/kernel-serial.log
 
-          timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -drive format=raw,file=out/esp.img               -drive if=none,format=raw,file=out/nvme.img,id=nvme0               -device nvme,drive=nvme0,serial=ZORIXNVME               -device qemu-xhci,id=xhci               -device ich9-intel-hda               -device hda-duplex               -netdev user,id=net0               -device virtio-net-pci,netdev=net0               -display none               -serial file:out/kernel-serial.log               -monitor unix:/tmp/zorix-kernel-monitor.sock,server,nowait               -qmp unix:/tmp/zorix-kernel-qmp.sock,server,nowait               -no-reboot -no-shutdown &
+          timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -cdrom out/ZorixOS-Native-0.6.iso               -boot d               -drive if=none,format=raw,file=out/nvme.img,id=nvme0               -device nvme,drive=nvme0,serial=ZORIXNVME               -device qemu-xhci,id=xhci               -device ich9-intel-hda               -device hda-duplex               -netdev user,id=net0               -device virtio-net-pci,netdev=net0               -display none               -serial file:out/kernel-serial.log               -monitor unix:/tmp/zorix-kernel-monitor.sock,server,nowait               -qmp unix:/tmp/zorix-kernel-qmp.sock,server,nowait               -no-reboot -no-shutdown &
           pid=$!
+
+          # Capture real framebuffer frames while each native application is visible.
+          (
+            capture_marker() {
+              marker="$1"
+              file="$2"
+              for n in $(seq 1 400); do
+                if grep -Fq "$marker" out/kernel-serial.log; then
+                  printf 'screendump %s\n' "$file" | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock >/dev/null 2>&1 || true
+                  exit 0
+                fi
+                sleep 0.05
+              done
+              exit 1
+            }
+            capture_marker 'ZORIX_APP_SETTINGS:ui-rendered' 'out/settings.ppm'
+          ) &
+          (
+            capture_marker() {
+              marker="$1"
+              file="$2"
+              for n in $(seq 1 400); do
+                if grep -Fq "$marker" out/kernel-serial.log; then
+                  printf 'screendump %s\n' "$file" | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock >/dev/null 2>&1 || true
+                  exit 0
+                fi
+                sleep 0.05
+              done
+              exit 1
+            }
+            capture_marker 'ZORIX_APP_BROWSER:ui-rendered' 'out/browser.ppm'
+          ) &
+          (
+            capture_marker() {
+              marker="$1"
+              file="$2"
+              for n in $(seq 1 400); do
+                if grep -Fq "$marker" out/kernel-serial.log; then
+                  printf 'screendump %s\n' "$file" | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock >/dev/null 2>&1 || true
+                  exit 0
+                fi
+                sleep 0.05
+              done
+              exit 1
+            }
+            capture_marker 'ZORIX_APP_STORE:ui-rendered' 'out/store.ppm'
+          ) &
 
           # Drive the native Glass pointer pipeline with a real QEMU PS/2 event.
           (
@@ -123,6 +190,10 @@ jobs:
               grep -Fq 'ZORIX_APP_SETTINGS:ui-rendered' out/kernel-serial.log
               grep -Fq 'ZORIX_APP_FILES:ring3-ready' out/kernel-serial.log
               grep -Fq 'ZORIX_APP_FILES:ui-rendered' out/kernel-serial.log
+              grep -Fq 'ZORIX_APP_BROWSER:ring3-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_APP_BROWSER:ui-rendered' out/kernel-serial.log
+              grep -Fq 'ZORIX_APP_STORE:ring3-ready' out/kernel-serial.log
+              grep -Fq 'ZORIX_APP_STORE:ui-rendered' out/kernel-serial.log
               grep -Fq 'ZORIX_RUNTIME_PROCESS:multi-ring3-launch-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_RUNTIME_DRIVERS:registry-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_LINUX_ABI:syscall-subset-ok' out/kernel-serial.log
@@ -159,6 +230,11 @@ jobs:
               printf 'screendump out/zorix-kernel-0.4.ppm\n' | socat - UNIX-CONNECT:/tmp/zorix-kernel-monitor.sock
               test -s out/zorix-kernel-0.4.ppm
               magick out/zorix-kernel-0.4.ppm out/zorix-kernel-0.4.png 2>/dev/null || convert out/zorix-kernel-0.4.ppm out/zorix-kernel-0.4.png
+              for shot in settings browser store; do
+                test -s "out/$shot.ppm"
+                magick "out/$shot.ppm" "out/$shot.png" 2>/dev/null || convert "out/$shot.ppm" "out/$shot.png"
+                test -s "out/$shot.png"
+              done
               colors="$(identify -format '%k' out/zorix-kernel-0.4.png)"
               echo "Zorix Kernel framebuffer unique colors: $colors"
               test "$colors" -ge 128
@@ -184,9 +260,17 @@ jobs:
           name: zorix-kernel-native
           path: |
             out/ZORIXKERNEL.EFI
+            out/ZorixOS-Native-0.6.iso
+            out/sdk-hello.obj
             out/kernel-serial.log
             out/qmp-input.log
             out/hmp-key.log
             out/zorix-kernel-0.4.png
+            out/settings.png
+            out/browser.png
+            out/store.png
+            sdk/README.md
+            sdk/include/zorix/zorix.h
+            sdk/examples/hello.c
           if-no-files-found: warn
           retention-days: 14
