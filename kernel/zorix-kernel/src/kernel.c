@@ -1272,6 +1272,8 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
     if (nr == 16U) {
         if (arg0==1U) serial("ZORIX_APP_SETTINGS:ring3-ready\n");
         else if (arg0==2U) serial("ZORIX_APP_FILES:ring3-ready\n");
+        else if (arg0==3U) serial("ZORIX_APP_BROWSER:ring3-ready\n");
+        else if (arg0==4U) serial("ZORIX_APP_STORE:ring3-ready\n");
         else serial("ZORIX_KERNEL_ERROR:native-app-start\n");
         return 1U;
     }
@@ -1376,6 +1378,14 @@ __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1
                   (U32)((arg2>>32)&0xffULL),(U32)(arg2&0xffffffULL),(U8)((arg2>>24)&0xffULL));
         return 1U;
     }
+    if (nr == 31U) {
+        serial("ZORIX_APP_BROWSER:ui-rendered\n");
+        return 1U;
+    }
+    if (nr == 32U) {
+        serial("ZORIX_APP_STORE:ui-rendered\n");
+        return 1U;
+    }
     return ~0ULL;
 }
 
@@ -1423,12 +1433,16 @@ static U32 copy_user_blob(U8 *dst,U8 *start,U8 *end) {
 
 static void launch_native_apps(void) {
     if(!copy_user_blob(g_user_region_settings,zk_settings_blob_start,zk_settings_blob_end)) {
-        serial("ZORIX_KERNEL_ERROR:settings-image\n");
-        return;
+        serial("ZORIX_KERNEL_ERROR:settings-image\n"); return;
     }
     if(!copy_user_blob(g_user_region_files,zk_files_blob_start,zk_files_blob_end)) {
-        serial("ZORIX_KERNEL_ERROR:files-image\n");
-        return;
+        serial("ZORIX_KERNEL_ERROR:files-image\n"); return;
+    }
+    if(!copy_user_blob(g_user_region_browser,zk_browser_blob_start,zk_browser_blob_end)) {
+        serial("ZORIX_KERNEL_ERROR:browser-image\n"); return;
+    }
+    if(!copy_user_blob(g_user_region_store,zk_store_blob_start,zk_store_blob_end)) {
+        serial("ZORIX_KERNEL_ERROR:store-image\n"); return;
     }
 
     g_current_pid=100U;
@@ -1440,6 +1454,16 @@ static void launch_native_apps(void) {
     serial("ZORIX_PROCESS:launch:pid=101:files\n");
     zk_enter_user((void*)g_user_region_files,(void*)(g_user_region_files+0x200000U-16U));
     serial("ZORIX_PROCESS:exit:pid=101:files\n");
+
+    g_current_pid=102U;
+    serial("ZORIX_PROCESS:launch:pid=102:browser\n");
+    zk_enter_user((void*)g_user_region_browser,(void*)(g_user_region_browser+0x200000U-16U));
+    serial("ZORIX_PROCESS:exit:pid=102:browser\n");
+
+    g_current_pid=103U;
+    serial("ZORIX_PROCESS:launch:pid=103:store\n");
+    zk_enter_user((void*)g_user_region_store,(void*)(g_user_region_store+0x200000U-16U));
+    serial("ZORIX_PROCESS:exit:pid=103:store\n");
 
     g_current_pid=42U;
     serial("ZORIX_RUNTIME_PROCESS:multi-ring3-launch-ok\n");
