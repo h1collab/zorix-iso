@@ -135,59 +135,11 @@ void zr_glass(U32 *fb,U32 stride,U32 width,U32 height,U32 format,
     }
 }
 
-static const U8 letters[26][7]={
- {14,17,17,31,17,17,17},{30,17,17,30,17,17,30},{14,17,16,16,16,17,14},{30,17,17,17,17,17,30},
- {31,16,16,30,16,16,31},{31,16,16,30,16,16,16},{14,17,16,23,17,17,14},{17,17,17,31,17,17,17},
- {31,4,4,4,4,4,31},{7,2,2,2,2,18,12},{17,18,20,24,20,18,17},{16,16,16,16,16,16,31},
- {17,27,21,21,17,17,17},{17,25,21,19,17,17,17},{14,17,17,17,17,17,14},{30,17,17,30,16,16,16},
- {14,17,17,17,21,18,13},{30,17,17,30,20,18,17},{15,16,16,14,1,1,30},{31,4,4,4,4,4,4},
- {17,17,17,17,17,17,14},{17,17,17,17,17,10,4},{17,17,17,21,21,21,10},{17,17,10,4,10,17,17},
- {17,17,10,4,4,4,4},{31,1,2,4,8,16,31}
-};
-static const U8 digits[10][7]={
- {14,17,19,21,25,17,14},{4,12,4,4,4,4,14},{14,17,1,2,4,8,31},{30,1,1,14,1,1,30},{2,6,10,18,31,2,2},
- {31,16,16,30,1,1,30},{14,16,16,30,17,17,14},{31,1,2,4,8,8,8},{14,17,17,14,17,17,14},{14,17,17,15,1,1,14}
-};
-
-static U8 zr_glyph(char ch,U32 row){
-    if(ch>='A'&&ch<='Z')return letters[(U32)(ch-'A')][row];
-    if(ch>='a'&&ch<='z')return letters[(U32)(ch-'a')][row];
-    if(ch>='0'&&ch<='9')return digits[(U32)(ch-'0')][row];
-    if(ch=='-')return row==3U?31U:0U;
-    if(ch=='.')return row==6U?4U:0U;
-    if(ch==':')return (row==2U||row==5U)?4U:0U;
-    return 0U;
-}
+extern void zr_font_text(U32*,U32,U32,U32,U32,const char*,U32,U32,U32,U32);
 
 void zr_text(U32 *fb,U32 stride,U32 width,U32 height,U32 format,
              const char *text,U32 x,U32 y,U32 color,U32 scale){
-    if(!fb||!text)return;
-    if(scale<1U)scale=1U;if(scale>4U)scale=4U;
-    U8 r=(U8)((color>>16)&0xffU),g=(U8)((color>>8)&0xffU),b=(U8)(color&0xffU);
-    U32 cursor=x;
-    for(U32 ci=0;ci<64U;++ci){
-        char ch=text[ci];if(ch==0)break;
-        if(ch==' '){cursor+=4U*scale;continue;}
-        for(U32 gy=0;gy<7U;++gy){
-            U8 bits=zr_glyph(ch,gy);
-            for(U32 gx=0;gx<5U;++gx){
-                if(!(bits&(1U<<(4U-gx)))) continue;
-                U32 px=cursor+gx*scale,py=y+gy*scale;
-                /* Soft edge halo makes the tiny built-in face read like a
-                 * regular UI font instead of raw framebuffer blocks. */
-                if(px>0U&&py>0U&&px+scale+1U<width&&py+scale+1U<height){
-                    for(U32 yy=py-1U;yy<=py+scale;++yy){
-                        U32 *row=fb+(UN)yy*stride;
-                        for(U32 xx=px-1U;xx<=px+scale;++xx){
-                            U32 edge=(xx<px||xx>=px+scale||yy<py||yy>=py+scale);
-                            row[xx]=zr_blend(row[xx],format,r,g,b,(U8)(edge?48U:235U));
-                        }
-                    }
-                }
-            }
-        }
-        cursor+=6U*scale;
-    }
+    zr_font_text(fb,stride,width,height,format,text,x,y,color,scale);
 }
 
 static void zr_dot(U32 *fb,U32 stride,U32 width,U32 height,U32 format,
