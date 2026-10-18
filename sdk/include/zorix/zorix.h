@@ -5,7 +5,7 @@ typedef unsigned char zk_u8;
 typedef unsigned int zk_u32;
 typedef unsigned long long zk_u64;
 
-#define ZORIX_ABI_VERSION 0x00060000ULL
+#define ZORIX_ABI_VERSION 0x00070000ULL
 
 enum zorix_syscall {
     ZK_GETPID=0,
