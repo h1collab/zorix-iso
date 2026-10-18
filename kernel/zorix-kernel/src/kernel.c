@@ -67,7 +67,7 @@ typedef struct {
 typedef struct {
     U32 revision;
     HANDLE parent;
-    ST *system_table;
+    void *system_table;
     HANDLE device_handle;
     void *file_path;
     void *reserved;
