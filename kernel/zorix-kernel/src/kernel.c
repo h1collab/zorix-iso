@@ -596,7 +596,7 @@ static STATUS load_native_rootfs(HANDLE image) {
 
     /* Rootfs is bounded to 256 MiB for the current native image. Read in
      * chunks until EFI reports EOF (zero-byte read). */
-    const U64 cap=256ULL*1024ULL*1024ULL;
+    const U64 cap=128ULL*1024ULL*1024ULL;
     void *buf=NULL;
     s=g_bs->alloc(2U,(UN)cap,&buf);
     if(FAILED(s)||!buf){ file->close(file); root->close(root); return s; }
@@ -1197,7 +1197,7 @@ static U64 syscall_dispatch(U64 nr, U64 arg0, U64 arg1, U64 arg2) {
     if (nr == ZK_SYS_YIELD) return 0U;
     if (nr == ZK_SYS_GETPID) return 1U;
     if (nr == ZK_SYS_CLOCK_TICKS) return zk_timer_ticks;
-    if (nr == ZK_SYS_ABI_VERSION) return 0x00060000ULL;
+    if (nr == ZK_SYS_ABI_VERSION) return 0x00070000ULL;
     return ~0ULL;
 }
 
@@ -1206,7 +1206,7 @@ static void syscall_selftest(void) {
     U64 pid = syscall_dispatch(ZK_SYS_GETPID,0,0,0);
     U64 abi = syscall_dispatch(ZK_SYS_ABI_VERSION,0,0,0);
     U64 clock = syscall_dispatch(ZK_SYS_CLOCK_TICKS,0,0,0);
-    if (pid == 1U && abi == 0x00060000ULL && clock >= before &&
+    if (pid == 1U && abi == 0x00070000ULL && clock >= before &&
         syscall_dispatch(0xffffU,0,0,0) == ~0ULL) {
         serial("ZORIX_KERNEL_SYSCALL:native-abi-dispatch-ok\n");
     } else {
@@ -1317,7 +1317,7 @@ static U32 user_ptr_ok_for_current_process(U64 p) {
 
 __attribute__((ms_abi)) U64 zk_syscall_int80_dispatch(U64 nr, U64 arg0, U64 arg1, U64 arg2) {
     if (nr == 0U) return g_current_pid;
-    if (nr == 1U) return 0x00060000ULL;
+    if (nr == 1U) return 0x00070000ULL;
     if (nr == 2U) return zk_timer_ticks;
     if (nr == 3U) return 0U;
     if (nr == 4U) {
