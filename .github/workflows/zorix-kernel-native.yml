@@ -9,7 +9,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: zorix-kernel-native-v04-${{ github.ref }}
@@ -252,6 +252,22 @@ jobs:
           wait "$pid" 2>/dev/null || true
           echo 'Zorix Kernel did not reach kernel_main.' >&2
           exit 1
+
+      - name: Publish verified native ISO release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          tag="native-v0.6.0"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" out/ZorixOS-Native-0.6.iso --clobber
+          else
+            gh release create "$tag" out/ZorixOS-Native-0.6.iso \
+              --target "$GITHUB_SHA" \
+              --title "Zorix Native 0.6" \
+              --prerelease \
+              --notes "Verified native Zorix Kernel 0.6 ISO. Boots directly via UEFI/OVMF and includes the Zorix SDK."
+          fi
 
       - name: Upload kernel prototype
         if: always()
