@@ -67,7 +67,7 @@ zk_user_blob_start:
 
     movq $1, %rax
     int $0x80
-    cmpl $0x00060000, %eax
+    cmpl $0x00070000, %eax
     jne .Lfail
 
     movq $2, %rax
