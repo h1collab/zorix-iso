@@ -10,7 +10,7 @@ def write_text(path, text):
     path.write_text(text, encoding="utf-8")
 
 def ppm(path, phase, accent):
-    w,h=1024,768
+    w,h=1280,800
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as f:
         f.write(f"P6\n{w} {h}\n255\n".encode())
@@ -65,7 +65,10 @@ def stage(root, repo):
     palettes=[
         (44,142,255),(111,86,255),(23,199,174),(255,105,137),
         (73,172,255),(116,225,175),(161,118,255),(255,174,85),
-        (46,118,188),(82,173,142),(104,87,181),(189,78,117)
+        (46,118,188),(82,173,142),(104,87,181),(189,78,117),
+        (72,198,255),(138,96,255),(34,220,184),(255,122,153),
+        (58,160,230),(104,211,164),(181,132,255),(255,192,103),
+        (56,132,202),(96,184,154),(126,108,198),(207,94,134)
     ]
     for i,pal in enumerate(palettes):
         ppm(root/f"System/Assets/Wallpapers/tide-{i+1:02d}.ppm",i*0.53,pal)
