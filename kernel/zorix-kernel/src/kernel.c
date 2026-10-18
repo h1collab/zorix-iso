@@ -262,6 +262,7 @@ static UN g_heap_size;
 
 static U32 *g_backbuffer;
 static UN g_backbuffer_bytes;
+static U32 g_compositor_restore[220U * 32U];
 static IDT_ENTRY g_idt[256];
 
 static U64 g_gdt[7];
@@ -409,6 +410,13 @@ static void compositor_selftest(void) {
     U32 x0 = (w - rw) / 2U;
     U32 y0 = h > 115U ? h - 108U : 0U;
 
+    /* Preserve the benchmark strip so compositor validation never corrupts
+     * the final desktop screenshot. */
+    for (U32 yy=0; yy<rh; ++yy) {
+        U32 *src=g_backbuffer+(UN)(y0+yy)*i->stride+x0;
+        for (U32 xx=0; xx<rw; ++xx) g_compositor_restore[yy*220U+xx]=src[xx];
+    }
+
     U64 cycle_start = zk_rdtsc();
     U64 tick_start = zk_timer_ticks;
     U64 last_tick = tick_start;
@@ -453,6 +461,12 @@ static void compositor_selftest(void) {
     serial(":presented=");
     serial_u32(presented_frames);
     serial("\n");
+
+    for (U32 yy=0; yy<rh; ++yy) {
+        U32 *dst=g_backbuffer+(UN)(y0+yy)*i->stride+x0;
+        for (U32 xx=0; xx<rw; ++xx) dst[xx]=g_compositor_restore[yy*220U+xx];
+    }
+    present_rect(x0,y0,x0+rw,y0+rh);
 
     if (scheduled_frames >= COMPOSITOR_HZ - 1U &&
         scheduled_frames <= COMPOSITOR_HZ + 1U &&
