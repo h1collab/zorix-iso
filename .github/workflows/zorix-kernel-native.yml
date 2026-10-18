@@ -8,6 +8,10 @@ on:
       - 'tools/build-native-rootfs.py'
       - '.github/workflows/zorix-kernel-native.yml'
   workflow_dispatch: {}
+  pull_request:
+    paths:
+      - 'kernel/zorix-kernel/**'
+      - '.github/workflows/zorix-kernel-native.yml'
 
 permissions:
   contents: write
@@ -27,6 +31,16 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq clang lld qemu-system-x86 ovmf dosfstools mtools socat imagemagick xorriso
+
+      - name: Compile transitional BIOS entry (assembly smoke test)
+        run: |
+          set -euxo pipefail
+          mkdir -p out
+          clang --target=x86_64-unknown-none-elf -ffreestanding -mno-red-zone \
+            -c kernel/zorix-kernel/src/bios_entry.S -o out/bios_entry.o
+          file out/bios_entry.o | grep -F 'ELF 64-bit'
+          # Deliberately NOT a BIOS boot acceptance test: core handoff is pending.
+          echo 'ZORIX_BIOS_STAGE:entry-assembled-only'
 
       - name: Build independent Zorix Kernel EFI image
         run: |
