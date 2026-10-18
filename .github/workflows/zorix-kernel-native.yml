@@ -5,6 +5,7 @@ on:
     paths:
       - 'kernel/zorix-kernel/**'
       - 'sdk/**'
+      - 'tools/build-native-rootfs.py'
       - '.github/workflows/zorix-kernel-native.yml'
   workflow_dispatch: {}
 
@@ -45,21 +46,34 @@ jobs:
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/wireless.c -o out/wireless.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/glass_render.c -o out/glass_render.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/ui_font.c -o out/ui_font.obj
+          clang --target=x86_64-pc-windows-msvc             -ffreestanding -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -c kernel/zorix-kernel/src/rootfs.c -o out/rootfs.obj
           clang --target=x86_64-pc-windows-msvc             -ffreestanding -mno-red-zone -fno-stack-protector -fno-builtin -O2 -Wall -Wextra -Werror             -I sdk/include -c sdk/examples/hello.c -o out/sdk-hello.obj
           test -s out/sdk-hello.obj
           echo 'ZORIX_SDK:example-build-ok'
-          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj out/apps.obj out/runtime.obj out/linux_abi.obj out/installer.obj out/driver_core.obj out/zorixfs.obj out/net_stack.obj out/audio.obj out/wireless.obj out/glass_render.obj out/ui_font.obj
+          lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64             /out:out/ZORIXKERNEL.EFI out/kernel.obj out/ports.obj out/user.obj out/apps.obj out/runtime.obj out/linux_abi.obj out/installer.obj out/driver_core.obj out/zorixfs.obj out/net_stack.obj out/audio.obj out/wireless.obj out/glass_render.obj out/ui_font.obj out/rootfs.obj
           test -s out/ZORIXKERNEL.EFI
           sha256sum out/ZORIXKERNEL.EFI
+
+      - name: Build native Zorix root filesystem
+        run: |
+          set -euxo pipefail
+          python3 tools/build-native-rootfs.py --repo . --stage out/rootfs-stage --out out/rootfs.zpk
+          test -s out/rootfs.zpk
+          sha256sum out/rootfs.zpk
+          rootfs_bytes="$(stat -c '%s' out/rootfs.zpk)"
+          echo "Zorix native rootfs bytes: $rootfs_bytes"
+          test "$rootfs_bytes" -ge 70000000
 
       - name: Create EFI system disk
         run: |
           set -euxo pipefail
-          truncate -s 64M out/esp.img
+          truncate -s 128M out/esp.img
           mkfs.vfat out/esp.img
           mmd -i out/esp.img ::EFI
           mmd -i out/esp.img ::EFI/BOOT
           mcopy -i out/esp.img out/ZORIXKERNEL.EFI ::EFI/BOOT/BOOTX64.EFI
+          mmd -i out/esp.img ::System
+          mcopy -i out/esp.img out/rootfs.zpk ::System/rootfs.zpk
 
       - name: Build bootable native Zorix ISO
         run: |
@@ -70,11 +84,11 @@ jobs:
           cp -r sdk/include out/iso-root/SDK/include
           cp -r sdk/examples out/iso-root/SDK/examples
           cp sdk/README.md out/iso-root/SDK/README.md
-          xorriso -as mkisofs -R -J -V ZORIX_NATIVE_06 \
+          xorriso -as mkisofs -R -J -V ZORIX_NATIVE_07 \
             -eltorito-alt-boot -e esp.img -no-emul-boot \
-            -o out/ZorixOS-Native-0.6.iso out/iso-root
-          test -s out/ZorixOS-Native-0.6.iso
-          sha256sum out/ZorixOS-Native-0.6.iso
+            -o out/ZorixOS-Native-0.7.iso out/iso-root
+          test -s out/ZorixOS-Native-0.7.iso
+          sha256sum out/ZorixOS-Native-0.7.iso
 
 
       - name: Boot Zorix Kernel in QEMU OVMF
@@ -92,7 +106,7 @@ jobs:
           truncate -s 64M out/nvme.img
           : > out/kernel-serial.log
 
-          timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -cdrom out/ZorixOS-Native-0.6.iso               -boot d               -drive if=none,format=raw,file=out/nvme.img,id=nvme0               -device nvme,drive=nvme0,serial=ZORIXNVME               -device qemu-xhci,id=xhci               -device ich9-intel-hda               -device hda-duplex               -netdev user,id=net0               -device virtio-net-pci,netdev=net0               -display none               -serial file:out/kernel-serial.log               -monitor unix:/tmp/zorix-kernel-monitor.sock,server,nowait               -qmp unix:/tmp/zorix-kernel-qmp.sock,server,nowait               -no-reboot -no-shutdown &
+          timeout --signal=TERM --kill-after=3s 40s             qemu-system-x86_64               -machine q35,accel=tcg               -cpu max -smp 2 -m 512               -drive if=pflash,format=raw,readonly=on,file="$CODE"               -drive if=pflash,format=raw,file=out/OVMF_VARS.fd               -cdrom out/ZorixOS-Native-0.7.iso               -boot d               -drive if=none,format=raw,file=out/nvme.img,id=nvme0               -device nvme,drive=nvme0,serial=ZORIXNVME               -device qemu-xhci,id=xhci               -device ich9-intel-hda               -device hda-duplex               -netdev user,id=net0               -device virtio-net-pci,netdev=net0               -display none               -serial file:out/kernel-serial.log               -monitor unix:/tmp/zorix-kernel-monitor.sock,server,nowait               -qmp unix:/tmp/zorix-kernel-qmp.sock,server,nowait               -no-reboot -no-shutdown &
           pid=$!
 
           # Capture real framebuffer frames while each native application is visible.
@@ -165,6 +179,7 @@ jobs:
           for second in $(seq 1 30); do
             if grep -Fq 'ZORIX_KERNEL_STATUS:desktop-foundation-running' out/kernel-serial.log; then
               grep -Fq 'ZORIX_KERNEL_STAGE:boot-services-exited' out/kernel-serial.log
+              grep -Fq 'ZORIX_ROOTFS:mounted:files=' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_MEMORY:heap-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_IDT:breakpoint-ok' out/kernel-serial.log
               grep -Fq 'ZORIX_KERNEL_PAGING:cr3=' out/kernel-serial.log
@@ -258,15 +273,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          tag="native-v0.6.0"
+          tag="native-v0.7.0"
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" out/ZorixOS-Native-0.6.iso --clobber
+            gh release upload "$tag" out/ZorixOS-Native-0.7.iso --clobber
           else
-            gh release create "$tag" out/ZorixOS-Native-0.6.iso \
+            gh release create "$tag" out/ZorixOS-Native-0.7.iso \
               --target "$GITHUB_SHA" \
-              --title "Zorix Native 0.6" \
+              --title "Zorix Native 0.7" \
               --prerelease \
-              --notes "Verified native Zorix Kernel 0.6 ISO. Boots directly via UEFI/OVMF and includes the Zorix SDK."
+              --notes "Verified native Zorix Kernel 0.7 ISO with mounted native rootfs. Boots directly via UEFI/OVMF and includes the Zorix SDK."
           fi
 
       - name: Upload kernel prototype
@@ -276,7 +291,8 @@ jobs:
           name: zorix-kernel-native
           path: |
             out/ZORIXKERNEL.EFI
-            out/ZorixOS-Native-0.6.iso
+            out/ZorixOS-Native-0.7.iso
+            out/rootfs.zpk
             out/sdk-hello.obj
             out/kernel-serial.log
             out/qmp-input.log
